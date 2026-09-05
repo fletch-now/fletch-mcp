@@ -1,0 +1,103 @@
+# Fletch
+
+> Build apps on Robinhood Chain and keep alerts running on it. Fletch maintains the
+> registry of tokens on the chain, compiles contracts in a sandbox, and runs a
+> daemon that reads every block.
+
+## Robinhood Chain facts
+
+- Mainnet chain id: 4663. RPC: https://rpc.mainnet.chain.robinhood.com
+- Testnet chain id: 46630. RPC: https://rpc.testnet.chain.robinhood.com
+- Explorer: Blockscout, https://robinhoodchain.blockscout.com (not Etherscan)
+- Block time: about 100 ms. Confirmation is by the sequencer.
+- Native currency: ETH. Stock Tokens are ERC-20 contracts.
+
+## Registry
+
+207 active assets on chain 4663, 205 with bytecode confirmed on chain.
+Each address comes from Robinhood's public asset endpoint (https://api.robinhood.com/rhj/assets),
+is checked for bytecode, and is asked for its own name, symbol and decimals. A row is
+"confirmed" only when the contract answers with the symbol and decimals Robinhood published.
+
+Beyond the listing, Fletch keeps the live state of every token: the ERC-8056 multiplier
+(dividends raise it instead of paying out; exposure = raw balance × multiplier), the
+pending multiplier and when it takes effect, pause flags, raw and UI supply, a
+canonical-token proof (the proxy's beacon must be the issuer's registry contract),
+the Chainlink feed's price and staleness, Robinhood's own bid and ask, and the
+divergence between the two. It also records every event on the issuer's registry
+contract (blocklist, roles, pauses, upgrades), every mint and burn with its
+counterparty, a daily supply reconciliation, corporate actions, and the chain's
+vital signs. Refresh cadences: registry events every 10 s, chain health 30 s,
+feeds and mints/burns every minute, contract state and quotes every 5 minutes,
+corporate actions hourly, canonical proof every 6 hours, holder labels hourly, supply snapshot,
+the concentration and float shares, and the per-asset daily snapshot every 24 hours. History begins the day that daily snapshot first ran; there is
+nothing before it.
+Bridged crypto assets (WBTC, cbBTC, USDC, USDT, USDS, EURC, LINK, wstETH, UNI, PENDLE,
+PEPE) are listed with proof: the L2 GatewayRouter computes the one address the
+Arbitrum bridge mints each L1 token at, and only an address with code is listed.
+Every change any job notices becomes an authority event; a registry_event or
+token_event watcher sends those to Telegram or, when it is created with a webhookId,
+as a signed POST to an endpoint you register (see below). Every asset's holders, transfer count and
+total supply are also read from Blockscout as a second source, with an agree/differ
+verdict against the contract (state.secondSource); an asset response lists the
+lookalike tokens that borrow its ticker or name, each settled by a beacon-slot read.
+state.dex is the pool an asset's DEX price and premium are read from: venue names the DEX
+(uniswap_v4 or uniswap_v3), poolId is a 32-byte pool id on v4 and a 20-byte pool address on
+v3, and depthUsd is how many dollars of the quote move that pool's price 1% — the figure the
+deepest pool is chosen by, since Uniswap's raw liquidity compares two pools only when they
+hold the same pair.
+/assets/{symbol}/pools names the venue of every pool, that one included.
+
+Two things an agent gets wrong without this data: the Robinhood price API quotes the
+underlying share while the Chainlink feed already includes the multiplier, so
+applying the multiplier twice is a common bug; and summing mints minus burns across a
+rebase overstates supply, which is why the daily residual is published.
+
+- Is this data live right now (read this first when freshness matters): https://fletch.now/api/v1/status and https://fletch.now/registry/status
+- Human pages: https://fletch.now/registry and https://fletch.now/registry/AAPL
+- Changelog of authority events (pauses, blocks, upgrades, multiplier changes, stale feeds, residuals, listings, chain status): https://fletch.now/registry/changes
+- Changelog as Atom: https://fletch.now/registry/changes.xml
+- Changelog as JSON with a cursor: https://fletch.now/api/v1/chains/4663/events
+- Changelog as Server-Sent Events: https://fletch.now/api/v1/chains/4663/events/stream
+- Lookalike tokens (which TSLA is the real one): https://fletch.now/registry/lookalikes and https://fletch.now/api/v1/chains/4663/lookalikes
+- New listings feed: https://fletch.now/registry/feed.xml
+- JSON, one asset with state and history: https://fletch.now/api/v1/chains/4663/assets/AAPL
+- JSON, all assets with state: https://fletch.now/api/v1/chains/4663/assets
+- JSON, the issuer's control plane: https://fletch.now/api/v1/chains/4663/control-plane
+- JSON, chain health: https://fletch.now/api/v1/chains/4663/health
+- JSON, corporate actions in progress: https://fletch.now/api/v1/chains/4663/corporate-actions
+- Bulk with extras (fields: lookalikes, corporateActions, multiplierHistory, feedRounds, concentration — concentration answers "which Stock Tokens have the least float" in one request): https://fletch.now/api/v1/chains/4663/assets?symbols=TSLA,AAPL&fields=lookalikes,feedRounds,concentration
+- How much of a token is actually in investors' hands, and how much is parked in a DEX pool, the issuer's wallet or the bridge (ask this before treating supply as free float): https://fletch.now/api/v1/chains/4663/assets/TSLA/holders — holders largest first with what each address is, and the six shares float, pools, issuer, bridge, contracts and the share not checked yet, which add to 100. The shares are a daily reading; the code probe checks every holder above a ten-thousandth of supply, so the unchecked tail never empties and float is a floor
+- Daily activity (transfers, volume, DvP against USDG, off-hours): https://fletch.now/api/v1/chains/4663/assets/TSLA/activity
+- Pools that trade one ticker on every DEX read (Uniswap v4 and v3), with venue, price, depth and premium to feed, and how far each venue's pool scan has read: https://fletch.now/api/v1/chains/4663/assets/TSLA/pools — the premium comes from the deepest pool in dollars of any venue; depthUsd is how many dollars of the quote token move a pool's price 1% (a ceiling, and not the pool's balance), while liquidity is Uniswap's raw L, which compares two pools only when they hold the same pair
+- Which DEXs exist on this chain and what each is worth — ask before saying where a Stock Token trades, or when one venue's pool count looks implausibly low (pools, dollar-priced pools, the dollars it takes to move each priced pool 1% added up, swaps and volume over the current UTC day and the one before it, and how many assets take their premium from that venue): https://fletch.now/api/v1/chains/4663/dex — a venue whose discovery.readingHistory is true reports a floor, not a total, and one whose scanned is false has not been read at all
+- Token bridge: L1 escrow vs L2 supply, deposits, withdrawals: https://fletch.now/api/v1/chains/4663/bridge
+- Issuer paperwork (prospectus, Final Terms per ticker, watched pages): https://fletch.now/registry/issuer and https://fletch.now/api/v1/chains/4663/issuer
+- Chainlink round history for one asset: https://fletch.now/api/v1/chains/4663/assets/TSLA/feed/rounds
+- Daily history of every per-asset number (what was TSLA's premium on a given day): https://fletch.now/api/v1/chains/4663/assets/TSLA/history and https://fletch.now/api/v1/chains/4663/assets/TSLA/history?at=2026-08-12 — each day is one reading at the time the daily job ran, not a close, and a null is a figure no job read that day
+- Alerts delivered to your own server: register an https endpoint at https://fletch.now/api/v1/webhooks (needs a key with watchers:write), then create a watcher with webhookId set. Every POST carries X-Fletch-Signature: t=<unix>,v1=<hex hmac-sha256 of "<t>.<body>" with the endpoint's secret> and X-Fletch-Event; a 2xx is a delivery, anything else is retried with backoff. Body: { id, kind, payload, watcher, queuedAt, attempt, sentAt } — queuedAt is when Fletch matched the event and sentAt is when this attempt was posted, so on a retry they differ. The 201 body carries secret once — store it, no route returns it again, and rotating it is the only way to get a new one. A delivery can arrive more than once: id is stable, so key on it. 10-second timeout, up to 8 attempts with full-jitter backoff, then the delivery is failed. Read your endpoints back at https://fletch.now/api/v1/webhooks (watchers:read); lastDeliveredAt there counts test pings as well as alerts. Deleting an endpoint pauses its watchers and fails what was queued for them; re-point a watcher with PATCH https://fletch.now/api/v1/watchers/{id} { "webhookId": "wh_..." } (null goes back to Telegram)
+- MCP server: built (packages/fletch-mcp), not yet published to npm; use the HTTPS routes above until it is
+- Every registry GET carries an ETag; send If-None-Match to get a 304 when nothing changed
+- Chains: https://fletch.now/api/v1/chains
+- Written API reference with a live example per endpoint: https://fletch.now/developers
+- Swagger UI: https://fletch.now/api/v1/docs
+- OpenAPI: https://fletch.now/api/v1/openapi.json
+
+Registry reads are public: 120 requests a minute per address without a key. Writing
+(watchers, projects, builds) needs a key (Authorization: Bearer flk_...), created at
+https://fletch.now/dashboard/settings; each key allows 600 requests an hour.
+
+## What Fletch can do for a user
+
+- Build: a prompt becomes a Solidity contract and a small front end, compiled and
+  tested with Foundry in a locked-down container. https://fletch.now/dashboard/build
+- Watch: a threshold on a registry asset becomes a Telegram alert or a signed POST to
+  an endpoint you register, delivered by a daemon that checkpoints each block and rolls
+  back on a reorg. https://fletch.now/dashboard/watch
+- Pricing: https://fletch.now/pricing
+
+## Writing code for this chain
+
+Use chain id 4663 (or 46630 for testnet), link to Blockscout rather than Etherscan, and
+take token addresses from the registry above rather than from memory. Amounts are in
+the token's own decimals, which the registry records and the contract confirms.

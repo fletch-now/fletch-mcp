@@ -1,0 +1,22 @@
+{
+  "name": "fletch-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Fletch's Robinhood Chain registry: verified Stock Token addresses, live state, Chainlink rounds, lookalikes, the issuer's control plane and the changelog.",
+  "license": "MIT",
+  "type": "module",
+  "bin": { "fletch-mcp": "./index.mjs" },
+  "files": ["index.mjs", "README.md", "LICENSE", "CHANGELOG.md"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node index.mjs",
+    "test": "node --test test/smoke.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^3.25.0"
+  },
+  "repository": { "type": "git", "url": "https://github.com/fletch-now/fletch-mcp" },
+  "homepage": "https://fletch.now",
+  "bugs": { "url": "https://github.com/fletch-now/fletch-mcp/issues" },
+  "keywords": ["mcp", "model-context-protocol", "robinhood-chain", "stock-tokens", "chainlink", "fletch"]
+}
