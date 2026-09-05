@@ -8,8 +8,11 @@ history, lookalike tokens, the issuer's control plane, chain health and the chan
 A thin client of the public API at https://fletch.now; registry reads need no key.
 
 ```
-npx -y fletch-mcp
+npx -y github:fletch-now/fletch-mcp
 ```
+
+Runs straight from this repository; the npm package `fletch-mcp` follows, and the
+command becomes `npx -y fletch-mcp` when it does.
 
 [fletch.now/developers](https://fletch.now/developers) ·
 [API reference](https://fletch.now/api/v1/docs) ·
@@ -23,12 +26,12 @@ Claude Desktop, Claude Code, Cursor and any other MCP client take a stdio server
 ```json
 {
   "mcpServers": {
-    "fletch": { "command": "npx", "args": ["-y", "fletch-mcp"] }
+    "fletch": { "command": "npx", "args": ["-y", "github:fletch-now/fletch-mcp"] }
   }
 }
 ```
 
-Claude Code: `claude mcp add fletch -- npx -y fletch-mcp`.
+Claude Code: `claude mcp add fletch -- npx -y github:fletch-now/fletch-mcp`.
 
 ## Environment
 

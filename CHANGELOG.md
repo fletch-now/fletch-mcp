@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- README: install from GitHub with `npx -y github:fletch-now/fletch-mcp` until the npm package exists.
+
 ## 0.1.0 (2026-09-05)
 
 First release.
