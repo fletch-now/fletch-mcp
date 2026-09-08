@@ -25,6 +25,8 @@ const TOOL_NAMES = [
   "status",
   "list_assets",
   "get_asset",
+  "get_token",
+  "search_pools",
   "history",
   "feed_rounds",
   "holders",
@@ -66,8 +68,10 @@ function parse(result) {
 // only way to watch the bearer actually leave the process.
 function startFake(scheme = "http") {
   const seen = [];
+  let override = null;
   const handle = (request, response) => {
     seen.push({ path: request.url, headers: request.headers });
+    if (override) { override(request, response); return; }
     if (request.url === "/api/v1/status") {
       if (request.headers["if-none-match"] === '"s1"') {
         response.writeHead(304);
@@ -76,6 +80,16 @@ function startFake(scheme = "http") {
       }
       response.writeHead(200, { "content-type": "application/json", etag: '"s1"' });
       response.end(JSON.stringify({ verdict: "live", served: seen.length }));
+      return;
+    }
+    if (request.url.startsWith("/api/v1/chains/4663/dex/pools?")) {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ pools: [{ stateCurrent: false, pricePublished: false, priceUsd: null, depthUsd: null, stateCheckedAt: "2026-09-05T00:00:00Z" }], total: 900000 }));
+      return;
+    }
+    if (request.url.startsWith("/api/v1/tokens/")) {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ address: request.url.split("/").at(-1), trust: "unknown", symbol: null }));
       return;
     }
     if (request.url === "/api/v1/webhooks") {
@@ -91,7 +105,7 @@ function startFake(scheme = "http") {
     : createServer(handle);
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
-      resolve({ server, seen, url: `${scheme}://localhost:${server.address().port}` });
+      resolve({ server, seen, url: `${scheme}://localhost:${server.address().port}`, setResponse(handle) { override = handle; } });
     });
   });
 }
@@ -110,9 +124,19 @@ describe("over stdio against a local server", () => {
     fake.server.close();
   });
 
-  test("registers 17 tools and 2 resources", async () => {
+  test("registers 19 tools and 2 resources", async () => {
     const { tools } = await client.listTools();
     assert.deepEqual(tools.map((tool) => tool.name).sort(), [...TOOL_NAMES].sort());
+    for (const tool of tools) {
+      assert.deepEqual(tool.annotations, { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true });
+      assert.equal(tool.inputSchema.type, "object");
+    }
+    const tokenSchema = tools.find(tool => tool.name === "get_token").inputSchema;
+    assert.deepEqual(tokenSchema.required, ["address"]);
+    assert.ok(tokenSchema.properties.address.pattern);
+    const poolSchema = tools.find(tool => tool.name === "search_pools").inputSchema;
+    assert.equal(poolSchema.properties.limit.maximum, 500);
+    assert.equal(poolSchema.properties.limit.minimum, 1);
     const { resources } = await client.listResources();
     assert.equal(resources.length, 2);
     assert.deepEqual(
@@ -139,6 +163,27 @@ describe("over stdio against a local server", () => {
     assert.equal(again.served, 1, "the body must be the one cached from the first 200");
   });
 
+  test("new public tools make one bounded read and preserve unknown and stale facts", async () => {
+    const before = fake.seen.length;
+    const pools = parse(await client.callTool({ name: "search_pools", arguments: {} }));
+    assert.equal(fake.seen.length, before + 1, "never auto-page a whole registry");
+    assert.equal(fake.seen.at(-1).path, "/api/v1/chains/4663/dex/pools?sort=volume&limit=20");
+    assert.equal(fake.seen.at(-1).headers.authorization, undefined);
+    assert.deepEqual(pools.pools[0], { stateCurrent: false, pricePublished: false, priceUsd: null, depthUsd: null, stateCheckedAt: "2026-09-05T00:00:00Z" });
+    const address = `0x${"a".repeat(40)}`;
+    const token = parse(await client.callTool({ name: "get_token", arguments: { address } }));
+    assert.deepEqual(token, { address, trust: "unknown", symbol: null });
+    assert.equal(fake.seen.at(-1).headers.authorization, undefined);
+    parse(await client.callTool({ name: "search_pools", arguments: { q: address, kind: "community", limit: 5, offset: 10 } }));
+    assert.equal(fake.seen.at(-1).path, `/api/v1/chains/4663/dex/pools?q=${address}&kind=community&sort=volume&limit=5&offset=10`);
+    const count = fake.seen.length;
+    const invalid = await client.callTool({ name: "get_token", arguments: { address: "TSLA" } });
+    assert.equal(invalid.isError, true);
+    const tooMany = await client.callTool({ name: "search_pools", arguments: { limit: 501 } });
+    assert.equal(tooMany.isError, true);
+    assert.equal(fake.seen.length, count, "invalid inputs never dispatch");
+  });
+
   test("refuses to send the key over plain http", async () => {
     const before = fake.seen.length;
     const result = await client.callTool({ name: "webhooks", arguments: {} });
@@ -160,6 +205,57 @@ describe("over stdio against a local https server", () => {
   after(async () => {
     await client.close();
     fake.server.close();
+  });
+
+  test("refuses same-origin redirects before a key can reach another route", async () => {
+    const before = fake.seen.length;
+    fake.setResponse((_request, response) => {
+      response.writeHead(302, { location: "/api/v1/status" });
+      response.end();
+    });
+    try {
+      const result = await client.callTool({ name: "webhooks", arguments: {} });
+      assert.equal(result.isError, true);
+      assert.match(result.content[0].text, /refused redirect/);
+      assert.equal(fake.seen.length, before + 1);
+      assert.equal(fake.seen.at(-1).path, "/api/v1/webhooks");
+    } finally { fake.setResponse(null); }
+  });
+
+  test("upstream failures and malformed successes never expose body text or the configured key", async () => {
+    try {
+      for (const status of [403, 429, 500, 200]) {
+        fake.setResponse((request, response) => {
+          response.writeHead(status, { "content-type": "text/html" });
+          response.end(`PRIVATE_UPSTREAM_DETAIL ${request.headers.authorization}`);
+        });
+        const result = await client.callTool({ name: "webhooks", arguments: {} });
+        assert.equal(result.isError, true);
+        const output = JSON.stringify(result);
+        assert.ok(output.includes(String(status)));
+        assert.equal(output.includes("flk_test_only"), false);
+        assert.equal(output.includes("PRIVATE_UPSTREAM_DETAIL"), false);
+      }
+      fake.setResponse((request, response) => {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ webhooks: [], echoed: request.headers.authorization }));
+      });
+      const success = parse(await client.callTool({ name: "webhooks", arguments: {} }));
+      assert.equal(success.echoed, "Bearer [redacted]");
+    } finally { fake.setResponse(null); }
+  });
+
+  test("resource reads refuse redirects without sending an account key", async () => {
+    const before = fake.seen.length;
+    fake.setResponse((_request, response) => {
+      response.writeHead(302, { location: "/api/v1/webhooks" });
+      response.end();
+    });
+    try {
+      await assert.rejects(client.readResource({ uri: fake.url + "/llms.txt" }), /refused redirect/);
+      assert.equal(fake.seen.length, before + 1);
+      assert.equal(fake.seen.at(-1).headers.authorization, undefined);
+    } finally { fake.setResponse(null); }
   });
 
   test("sends the key to /api/v1/webhooks and to no other route", async () => {
@@ -194,4 +290,19 @@ describe("against https://fletch.now", () => {
     assert.ok(Array.isArray(status.jobs) && status.jobs.length > 0);
     assert.ok(Number.isFinite(Date.parse(status.checkedAt)));
   });
+});
+
+
+test("the distributable contains only its explicit public files and matching executable version", async () => {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const directory = fileURLToPath(new URL("../", import.meta.url));
+  const { stdout } = await promisify(execFile)(process.platform === "win32" ? "npm.cmd" : "npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { cwd: directory });
+  const [packed] = JSON.parse(stdout);
+  assert.equal(packed.name, "fletch-mcp");
+  assert.equal(packed.version, version);
+  assert.deepEqual(packed.files.map(file => file.path).sort(), ["CHANGELOG.md", "LICENSE", "README.md", "index.mjs", "package.json"]);
+  assert.ok((packed.files.find(file => file.path === "index.mjs").mode & 0o111) !== 0);
+  const source = readFileSync(INDEX, "utf8");
+  assert.ok(source.startsWith("#!/usr/bin/env node"));
 });

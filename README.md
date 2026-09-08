@@ -39,6 +39,9 @@ Claude Code: `claude mcp add fletch -- npx -y github:fletch-now/fletch-mcp`.
 - `FLETCH_API_KEY`: optional. Needed only by `webhooks`, which reads one account's own
   endpoints. The key is sent to `/api/v1/webhooks` and to no other route, and never over
   plain http; with an `http://` base the `webhooks` tool returns an error instead.
+  Redirects are refused, including same-origin redirects. Failure messages omit
+  upstream bodies and configured keys; successful text also redacts the configured
+  key if an upstream happens to echo it. Configure only a trusted API base.
 
 Rate limits are the API's: anonymous callers get 120 requests a minute per address, and
 a key has its own budget of 600 requests an hour. Every tool result is cached by ETag, so
@@ -56,6 +59,8 @@ keeps at most 200 entries for at most ten minutes each.
 | `feed_rounds` | Chainlink rounds for a ticker, `since`, `limit` |
 | `holders` | how much of a token is in investors' hands: the six shares (float, pools, issuer, bridge, contracts, unchecked, which add to 100), holders with share and address labels, ledger progress. Float is a floor: the probe checks holders above a ten-thousandth of supply |
 | `activity` | daily transfers, volume, DvP, off-hours |
+| `get_token` | resolve one exact mainnet address, retaining trust, metadata nulls and provenance |
+| `search_pools` | one filtered pool page, 20 rows by default, ordered by volume; no automatic full-registry load |
 | `pools` | pools trading one ticker on every DEX read (Uniswap v4 and v3), deepest first: venue, price, `depthUsd` (dollars that move the price 1%), raw liquidity L, premium to feed, and how far each venue's scan has read |
 | `dex_venues` | which DEXs exist on this chain and what each is worth: pools, dollar-priced pools, dollar depth at a 1% move, swaps and volume, assets priced there, and whether each venue has been read at all |
 | `bridge` | L1 escrow vs L2 supply, deposits, withdrawals |
@@ -79,7 +84,7 @@ multipliers are numbers.
 
 The tools read Robinhood Chain mainnet (chain 4663) only, and they cover the registry
 routes plus the webhook list. The API has more than this server exposes: `/chains`, the
-watcher routes, the event stream at `/events/stream`, and the build and project routes
+watcher routes, the event stream at `/api/v1/chains/4663/events/stream`, and the build and project routes
 are reachable over HTTPS as documented at
 [fletch.now/api/v1/docs](https://fletch.now/api/v1/docs) but have no tool here.
 
@@ -104,3 +109,26 @@ outside that test.
 ## Licence
 
 MIT. Fletch is not affiliated with Robinhood Markets, Inc.
+
+## Current data and snapshots
+
+The tools read the deployed API; status timeliness does not mean all figures are
+fresh. Inspect `metadataBacklog`, coverage and each observation timestamp.
+`stateCurrent=false` means current pool price, depth, valuations and changes are
+unpublished; preserve their nulls. A ticker or lookalike match does not verify an
+address. Legacy swap fields may cover two UTC days; read the endpoint note rather
+than assuming exact rolling 24-hour volume. Historical USD valuation is not inferred.
+
+Use `get_token` for one address and `search_pools` for one bounded filtered page.
+The resources remain opt-in; the server never fetches the full registry automatically.
+[Full agent reference](https://fletch.now/llms-full.txt) and
+[live schema](https://fletch.now/api/v1/openapi.json) describe current behavior.
+The dated 5 September documents remain historical; `docs/openapi-2026-09-08.json`
+and `docs/llms-2026-09-08.txt` capture the deployed contract for this update.
+
+All tools declare read-only, non-destructive, idempotent, open-world annotations.
+These are client hints; account routes still enforce their own authentication.
+Token resolution may refresh server-side metadata observations without changing
+an account or sending a chain transaction. Changelog cursor reads return the full
+sequence: apply kind/symbol filters locally and preserve `nextCursor` after each
+processed batch. No returned events does not establish indexing health.

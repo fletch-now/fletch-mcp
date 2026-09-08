@@ -1,6 +1,6 @@
 {
   "name": "fletch-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for Fletch's Robinhood Chain registry: verified Stock Token addresses, live state, Chainlink rounds, lookalikes, the issuer's control plane and the changelog.",
   "license": "MIT",
   "type": "module",

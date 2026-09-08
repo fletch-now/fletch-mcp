@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0 — 2026-09-08 (prepared)
+
+- Refuse redirects, redact configured credentials and omit upstream failure bodies; declare read-only tool annotations.
+- Add address resolution and bounded pool search tools. Preserve unknown values, trust and pool-state freshness.
+- Document metadata backlog and distinguish legacy activity windows from exact rolling volume.
+- Add dated snapshots of the deployed public contract; npm publication remains pending.
+
+
 ## Unreleased
 
 - README: install from GitHub with `npx -y github:fletch-now/fletch-mcp` until the npm package exists.
