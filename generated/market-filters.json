@@ -136,7 +136,7 @@
         {
           "value": "priced",
           "label": "Current price",
-          "description": "Usable selected-pool price observed within 15 minutes."
+          "description": "Usable selected-pool price with pool state and quote conversion inside their three-minute freshness policy."
         },
         {
           "value": "volume",

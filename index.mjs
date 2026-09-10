@@ -150,7 +150,7 @@ server.registerTool("filter_catalog", {
 }, async function catalog() { return text(await get(`/api/v1/chains/${CHAIN_ID}/markets/filters`)); });
 server.registerTool("token_markets", {
   title: "Token markets",
-  description: "Paginated issuer-listed and priority community token contracts, with identity verdicts, selected-pool market readings, sources, times and unavailable reasons. Use filter_catalog for the current combinations. V3 quote holdings and V4 1% depth remain separate; volume is not a depth fallback.",
+  description: "Read one bounded page of issuer-listed and priority community contracts, default 25 rows. Each metric carries observation.sourceId, blockNumber/hash, sourceAt, fetchedAt, expiresAt, method, parameters, inputs, coverage, status and readStatus. Compare expiresAt with the current time; retained values may coexist with failed refreshes. Market cap expires with its earliest required input. Selection has selectedAt, expiresAt and a versioned policy; economic dominance does not verify identity. Use filter_catalog for combinations. V3 quote holdings and V4 1% depth remain separate.",
   annotations: READ_ANNOTATIONS,
   inputSchema: {
     ...marketInput,
@@ -166,7 +166,7 @@ server.registerTool(
   {
     title: "Registry freshness",
     description:
-      "Freshness of everything Fletch publishes: the daemon's heartbeat, each of the registry's jobs against the cadence it should run at (verdict fresh, late, failing, filling, stalled or never; a figure can also be unread), the scanners still reading chain history with how long they have left, and the age of every figure. Call this before trusting a number whose freshness matters. A live verdict means jobs ran on schedule, not that all rows or figures are current. metadataBacklog records due, visibleDue and neverRead counts at measuredAt; compare per-field observation times and coverage; a 'filling' job means its figures are partial, not wrong, and 'stalled' means a scanner's checkpoint has stopped moving, not that it is slow.",
+      "Freshness of everything Fletch publishes: the daemon's heartbeat, each of the registry's jobs against the cadence it should run at (verdict fresh, late, failing, filling, stalled or never; a figure can also be unread), the scanners still reading chain history with how long they have left, and the age of every figure. Call this before trusting a number whose freshness matters. A live verdict means jobs ran on schedule, not that all rows or figures are current. metadataBacklog records due, visibleDue and neverRead counts at measuredAt. Each job metricCoverage records eligible, current, failed, unread and oldestInputAgeSeconds at measuredAt; current and failed can overlap after an unsuccessful refresh. Null coverage means unmeasured. Compare per-field observation times and coverage; a 'filling' job means its figures are partial, not wrong, and 'stalled' means a scanner's checkpoint has stopped moving, not that it is slow.",
     annotations: READ_ANNOTATIONS,
     inputSchema: {},
   },
@@ -205,7 +205,7 @@ server.registerTool(
   "get_token",
   {
     title: "Resolve a token address",
-    description: "Resolve one mainnet token address through the public registry. Return its actual trust, provenance and metadata; a ticker collision is not identity. Community requires readable metadata and bytecode evidence, and unknown fields remain null. The API may refresh missing or older-than-five-minute metadata with bounded contract reads. This does not submit a transaction or add a watcher.",
+    description: "Resolve one mainnet token address through the public registry. Return its actual trust, provenance and metadata; a ticker or matching beacon dependency cannot establish issuer origin. Community requires readable metadata and bytecode evidence, and unknown fields remain null. The API may refresh missing or older-than-five-minute metadata with bounded contract reads. This does not submit a transaction or add a watcher.",
     annotations: READ_ANNOTATIONS,
     inputSchema: { address: z.string().regex(/^0x[0-9a-fA-F]{40}$/).describe("20-byte EVM token address on chain 4663") },
   },
@@ -216,7 +216,7 @@ server.registerTool(
   "search_pools",
   {
     title: "Search listed and community pools",
-    description: "Read one bounded page of mainnet pools, default 20 rows ordered by volume with depth and swaps as fallbacks. Filter rather than loading the whole registry into context. stateCurrent requires a state observation within ten minutes; stale, future or unread state has null current price/depth/valuations and pricePublished=false. Missing values are unknown, never zero. Legacy swaps24h/volumeUsd24h may describe two UTC days; consult the response note and coverage, never call them an exact rolling day or infer USD volume from today's price. Discovery and token trust remain independent of liquidity.",
+    description: "Read one bounded page of mainnet pools, default 20 rows ordered by volume with depth and swaps as fallbacks. Filter rather than loading the whole registry into context. stateCurrent requires a state observation within three minutes and a current independently observed quote conversion when recorded; stale, future or unread state has null current price/depth/valuations and pricePublished=false. Missing values are unknown, never zero. Published swaps24h/volumeUsd24h require complete current rolling 24-hour coverage for the selected pool. Inspect the recorded valuation method and historical quote inputs; USDG uses a nominal dollar assumption and WETH uses an explicitly estimated historical oracle conversion. Discovery and token trust remain independent of liquidity.",
     annotations: READ_ANNOTATIONS,
     inputSchema: {
       q: z.string().max(256).optional().describe("Name, symbol, full token address or pool address search"),
@@ -293,7 +293,7 @@ server.registerTool(
   {
     title: "DEX pools for one asset",
     description:
-      "Pools trading a ticker on Uniswap v3 and v4, ordered by the endpoint's depthUsd field. V3 depth is observed quote-side holdings; V4 depth is a bounded quote estimate for a 1% price move. Raw liquidity L is not dollars. The best pool supplies the asset's premium to its feed. Swap counts and volume require a complete rolling 24-hour window ending at metricsAsOf; an end older than 120 seconds yields null. volumeValuation distinguishes nominal USDG denomination from recorded historical WETH oracle estimates. Keep source ages, coverage reasons and nulls. stateCurrent requires a valid state observation within ten minutes. A v4 pool has a pool id within PoolManager; a v3 pool has a contract address. Discovery reports each venue's scan progress; unscanned history can contain pools absent from this list.",
+      "Pools trading a ticker on Uniswap v3 and v4, ordered by the endpoint's depthUsd field. V3 depth is observed quote-side holdings; V4 depth is a bounded quote estimate for a 1% price move. Raw liquidity L is not dollars. The best pool supplies the asset's premium to its feed. Swap counts and volume require a complete rolling 24-hour window ending at metricsAsOf; an end older than 120 seconds yields null. volumeValuation distinguishes nominal USDG denomination from recorded historical WETH oracle estimates. Keep source ages, coverage reasons and nulls. stateCurrent requires a valid state observation within three minutes and a current independently observed quote conversion when recorded. A v4 pool has a pool id within PoolManager; a v3 pool has a contract address. Discovery reports each venue's scan progress; unscanned history can contain pools absent from this list.",
     annotations: READ_ANNOTATIONS,
     inputSchema: { symbol: z.string().describe("Ticker, e.g. TSLA") },
   },
@@ -339,7 +339,7 @@ server.registerTool(
   {
     title: "Lookalike tokens",
     description:
-      "ERC-20s on Robinhood Chain that borrow a listed ticker or exact name at another address, most held first, each with a verdict: impostor (fails the beacon test), unlisted_stock (issuer-deployed but not listed), or unverified (a bridged coin's ticker, where the Arbitrum gateway is one bridge among several). Filter by symbol.",
+      "ERC-20s on Robinhood Chain that borrow a listed ticker or exact name at another address, most held first, with the recorded collision verdict and evidence. A matching beacon is a dependency observation and does not establish issuer deployment; legacy unlisted_stock records are returned as unverified. Official listing or separately verified deployment evidence is required for issuer origin. Filter by symbol.",
     annotations: READ_ANNOTATIONS,
     inputSchema: { symbol: z.string().optional().describe("Ticker, e.g. TSLA"), limit: z.number().int().min(1).max(1000).optional() },
   },

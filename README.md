@@ -148,3 +148,27 @@ The input enums in `generated/market-filters.json` are generated from the public
 catalog. After the matching API release is active, run `npm run generate:filters`
 and the offline tests before publishing a client update. No market observations
 are bundled in that catalog.
+
+## Structured observation contract
+
+`token_markets` and a token's `reading` preserve each metric's `observation`:
+source ID, pinned block/hash when known, upstream `sourceAt`, separate
+`fetchedAt`, inclusive `expiresAt`, computation `method`, `parameters`, recursive
+`inputs` and coverage. `status` describes current/stale/missing/invalid age;
+`readStatus` independently describes ok/partial/failed/unread source access.
+Current retained values can coexist with a failed latest refresh. Compare the
+expiry with the current clock even after an ETag response, and preserve nulls.
+
+Market cap expires with the earliest required input: supply and burn balances,
+decimals and selected-pool price. Volume retains its historical quote inputs and
+valuation assumptions. Economic `selection` carries its observation time,
+expiry and versioned policy; it cannot establish issuer identity. A beacon
+match describes a dependency, with no exception to collision checks.
+
+Status jobs expose nullable `metricCoverage`: eligible/current/failed/unread
+counts, oldest input age and measurement time. Current and failed counts can
+overlap. Missing coverage has no implied completeness, and a recent job cannot
+refresh older metrics. The server forwards these facts unchanged using only the
+requested tool read; schema and full documentation resources remain opt-in.
+
+The reliability release's exact public schema snapshot and source hashes are in [the snapshot record](docs/SNAPSHOT-2026-09-10-reliability.md).

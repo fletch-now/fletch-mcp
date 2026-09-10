@@ -193,6 +193,35 @@ describe("over stdio against a local server", () => {
     assert.equal(again.served, fake.seen.findIndex(request => request.path === "/api/v1/status") + 1, "the body must be the one cached from the first 200");
   });
 
+  test("preserves metric inputs, selection expiry and partial status coverage with narrow reads", async () => {
+    const observation = {
+      sourceId: "rpc:erc20", blockNumber: "123", blockHash: null,
+      sourceAt: "2026-09-10T20:00:00Z", fetchedAt: "2026-09-10T20:00:01Z", expiresAt: "2026-09-10T20:05:00Z",
+      status: "current", readStatus: "failed", method: "erc20_totalSupply", parameters: {}, inputs: [],
+      coverage: { status: "complete", scope: "token", windowStartAt: null, windowEndAt: null },
+    };
+    const markets = { items: [{ address: `0x${"1".repeat(40)}`, dominantAddress: null,
+      selection: { selectedAt: null, expiresAt: null, status: "missing", policy: "fixture" },
+      marketCapUsd: { value: null, observation: { ...observation, inputs: [{ name: "supply", value: "100", asOf: observation.sourceAt, observation }] } },
+    }], total: 1 };
+    const status = { verdict: "degraded", jobs: [{ metricCoverage: { supply: {
+      eligible: 1, current: 1, failed: 1, unread: 0, oldestInputAgeSeconds: 20, measuredAt: "2026-09-10T20:00:20Z",
+    } } }] };
+    const before = fake.seen.length;
+    fake.setResponse((request, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(request.url.includes("/status") ? status : markets));
+    });
+    try {
+      assert.deepEqual(parse(await client.callTool({ name: "token_markets", arguments: { q: "TSLA", pageSize: 25 } })), markets);
+      assert.deepEqual(parse(await client.callTool({ name: "status", arguments: {} })), status);
+      assert.equal(fake.seen.length, before + 2, "no unrequested registry discovery");
+      const { tools } = await client.listTools();
+      assert.match(tools.find((tool) => tool.name === "token_markets").description, /expiresAt.*inputs/);
+      assert.match(tools.find((tool) => tool.name === "status").description, /metricCoverage/);
+    } finally { fake.setResponse(null); }
+  });
+
   test("new public tools make one bounded read and preserve unknown and stale facts", async () => {
     const before = fake.seen.length;
     const pools = parse(await client.callTool({ name: "search_pools", arguments: {} }));
