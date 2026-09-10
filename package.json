@@ -5,10 +5,11 @@
   "license": "MIT",
   "type": "module",
   "bin": { "fletch-mcp": "./index.mjs" },
-  "files": ["index.mjs", "README.md", "LICENSE", "CHANGELOG.md"],
+  "files": ["index.mjs", "generated/market-filters.json", "README.md", "LICENSE", "CHANGELOG.md"],
   "engines": { "node": ">=20" },
   "scripts": {
     "start": "node index.mjs",
+    "generate:filters": "node scripts/generate-market-filters.mjs",
     "test": "node --test test/smoke.test.mjs"
   },
   "dependencies": {

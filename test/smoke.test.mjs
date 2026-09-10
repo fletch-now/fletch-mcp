@@ -23,6 +23,8 @@ const { version } = JSON.parse(readFileSync(new URL("../package.json", import.me
 
 const TOOL_NAMES = [
   "status",
+  "token_markets",
+  "filter_catalog",
   "list_assets",
   "get_asset",
   "get_token",
@@ -92,6 +94,11 @@ function startFake(scheme = "http") {
       response.end(JSON.stringify({ address: request.url.split("/").at(-1), trust: "unknown", symbol: null }));
       return;
     }
+    if (request.url.startsWith("/api/v1/chains/4663/markets")) {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ path: request.url, items: [], total: 0 }));
+      return;
+    }
     if (request.url === "/api/v1/webhooks") {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({ webhooks: [] }));
@@ -124,7 +131,7 @@ describe("over stdio against a local server", () => {
     fake.server.close();
   });
 
-  test("registers 19 tools and 2 resources", async () => {
+  test("registers 21 tools and 2 resources", async () => {
     const { tools } = await client.listTools();
     assert.deepEqual(tools.map((tool) => tool.name).sort(), [...TOOL_NAMES].sort());
     for (const tool of tools) {
@@ -145,6 +152,29 @@ describe("over stdio against a local server", () => {
     );
   });
 
+  test("market schema matches generated public catalog and reads without account credentials", async () => {
+    const catalog = JSON.parse(readFileSync(new URL("../generated/market-filters.json", import.meta.url), "utf8"));
+    const { tools } = await client.listTools();
+    const schema = tools.find(tool => tool.name === "token_markets").inputSchema;
+    for (const [key, filter] of Object.entries(catalog.filters)) {
+      assert.deepEqual(schema.properties[key].enum, filter.options.map(option => option.value));
+    }
+    parse(await client.callTool({ name: "filter_catalog", arguments: {} }));
+    assert.equal(fake.seen.at(-1).path, "/api/v1/chains/4663/markets/filters");
+    parse(await client.callTool({ name: "token_markets", arguments: { kind: "community", activity: "traded", sort: "swaps", page: 2, pageSize: 25, minVolumeUsd: 0 } }));
+    const request = fake.seen.at(-1);
+    const url = new URL(request.path, fake.url);
+    assert.equal(url.pathname, "/api/v1/chains/4663/markets");
+    assert.equal(url.searchParams.get("minVolumeUsd"), "0");
+    assert.equal(url.searchParams.get("sort"), "swaps");
+    assert.equal(url.searchParams.get("page"), "2");
+    assert.equal(request.headers.authorization, undefined);
+    const before = fake.seen.length;
+    const invalid = await client.callTool({ name: "token_markets", arguments: { sort: "invented_sort" } });
+    assert.equal(invalid.isError, true);
+    assert.equal(fake.seen.length, before);
+  });
+
   test("sends the versioned user-agent and no bearer on a registry read", async () => {
     const first = parse(await client.callTool({ name: "status", arguments: {} }));
     assert.equal(first.verdict, "live");
@@ -160,7 +190,7 @@ describe("over stdio against a local server", () => {
     const request = fake.seen.at(-1);
     assert.equal(fake.seen.length, before + 1);
     assert.equal(request.headers["if-none-match"], '"s1"');
-    assert.equal(again.served, 1, "the body must be the one cached from the first 200");
+    assert.equal(again.served, fake.seen.findIndex(request => request.path === "/api/v1/status") + 1, "the body must be the one cached from the first 200");
   });
 
   test("new public tools make one bounded read and preserve unknown and stale facts", async () => {
@@ -301,7 +331,7 @@ test("the distributable contains only its explicit public files and matching exe
   const [packed] = JSON.parse(stdout);
   assert.equal(packed.name, "fletch-mcp");
   assert.equal(packed.version, version);
-  assert.deepEqual(packed.files.map(file => file.path).sort(), ["CHANGELOG.md", "LICENSE", "README.md", "index.mjs", "package.json"]);
+  assert.deepEqual(packed.files.map(file => file.path).sort(), ["CHANGELOG.md", "LICENSE", "README.md", "generated/market-filters.json", "index.mjs", "package.json"]);
   assert.ok((packed.files.find(file => file.path === "index.mjs").mode & 0o111) !== 0);
   const source = readFileSync(INDEX, "utf8");
   assert.ok(source.startsWith("#!/usr/bin/env node"));

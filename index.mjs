@@ -138,6 +138,29 @@ const READ_ANNOTATIONS = { readOnlyHint: true, destructiveHint: false, idempoten
 
 const server = new McpServer({ name: "fletch-registry", version: VERSION });
 
+const MARKET_FILTER_CATALOG = JSON.parse(readFileSync(new URL("./generated/market-filters.json", import.meta.url), "utf8"));
+const marketInput = Object.fromEntries(Object.entries(MARKET_FILTER_CATALOG.filters).map(function schema([key, filter]) {
+  return [key, z.enum(filter.options.map(function value(option) { return option.value; })).optional().describe(filter.label)];
+}));
+server.registerTool("filter_catalog", {
+  title: "Market filter catalog",
+  description: "Read current market filter values, labels, thresholds and presets shared with the Markets page. Combine filters with AND; unavailable readings cannot satisfy numeric thresholds.",
+  annotations: READ_ANNOTATIONS,
+  inputSchema: {},
+}, async function catalog() { return text(await get(`/api/v1/chains/${CHAIN_ID}/markets/filters`)); });
+server.registerTool("token_markets", {
+  title: "Token markets",
+  description: "Paginated issuer-listed and priority community token contracts, with identity verdicts, selected-pool market readings, sources, times and unavailable reasons. Use filter_catalog for the current combinations. V3 quote holdings and V4 1% depth remain separate; volume is not a depth fallback.",
+  annotations: READ_ANNOTATIONS,
+  inputSchema: {
+    ...marketInput,
+    q: z.string().optional().describe("Name, symbol or exact contract address"),
+    page: z.number().int().min(1).optional(),
+    pageSize: z.union([z.literal(25), z.literal(50)]).optional(),
+    minVolumeUsd: z.number().min(MARKET_FILTER_CATALOG.minVolumeUsd.minimum).max(MARKET_FILTER_CATALOG.minVolumeUsd.maximum).optional(),
+  },
+}, async function markets(params) { return text(await get(`/api/v1/chains/${CHAIN_ID}/markets${query(params)}`)); });
+
 server.registerTool(
   "status",
   {
@@ -171,7 +194,7 @@ server.registerTool(
   {
     title: "Get one asset by ticker",
     description:
-      "One asset with everything the registry knows: address, trust, live state, multiplier history, mints and burns, daily supply reconciliation, corporate actions, the issuer's control-plane events touching it, lookalike tokens that borrow its ticker, and the last 30 Chainlink rounds. Use this before writing any address into code. state.dex is the pool the DEX price and premium are read from: venue names the DEX (uniswap_v4 or uniswap_v3), poolId is a 32-byte pool id on v4 and a 20-byte pool address on v3, and depthUsd is how many dollars of the quote move that pool's price 1% — the figure the deepest pool is chosen by, since Uniswap's raw liquidity compares two pools only when they hold the same pair. The pools tool names the venue of every pool, that one included.",
+      "One asset with everything the registry knows: address, trust, live state, multiplier history, mints and burns, daily supply reconciliation, corporate actions, the issuer's control-plane events touching it, lookalike tokens that borrow its ticker, and the last 30 Chainlink rounds. Use this before writing any address into code. state.dex identifies the pool used for the DEX price and premium: venue names the DEX, and poolId is a 32-byte v4 pool id or a 20-byte v3 pool address. V3 depth uses observed quote-side holdings; V4 depth is a bounded quote estimate for a 1% price move. These measures are distinct and are not TVL. Use the pools tool for venue and observation details.",
     annotations: READ_ANNOTATIONS,
     inputSchema: { symbol: z.string().describe("Ticker, e.g. TSLA") },
   },
@@ -270,7 +293,7 @@ server.registerTool(
   {
     title: "DEX pools for one asset",
     description:
-      "The pools that trade a ticker, deepest first in dollars, on every DEX the registry reads: venue (uniswap_v4 or uniswap_v3), price in the quote and in dollars, depthUsd, liquidity, fee, hooks, swaps and volume, plus the pool used for the asset's premium against the Chainlink feed, which is the deepest pool in dollars of any venue. depthUsd is how many dollars of the quote token it takes to move the pool's price by 1% — a ceiling, since a move that leaves the position's range runs out of liquidity first, and not the pool's token balance; liquidity is Uniswap's raw in-range L, not a dollar figure, and compares two pools only when they hold the same pair. swaps24h and volumeUsd24h cover the current UTC day and the one before it, and are null for a pool discovered inside that window, whose earlier swaps the scan never read. stateCurrent requires a valid observation within ten minutes; stale/unread/future state suppresses current price, depth, liquidity and changes. Keep stateCheckedAt and nulls. A v4 pool is an id inside the one PoolManager and has no address of its own; a v3 pool is a contract and carries poolAddress. discovery says how far each venue's pool scan has read: while readingHistory is true a pool in blocks not yet reached is missing from the list, and while scanned is false that venue has not been read at all.",
+      "Pools trading a ticker on Uniswap v3 and v4, ordered by the endpoint's depthUsd field. V3 depth is observed quote-side holdings; V4 depth is a bounded quote estimate for a 1% price move. Raw liquidity L is not dollars. The best pool supplies the asset's premium to its feed. Swap counts and volume require a complete rolling 24-hour window ending at metricsAsOf; an end older than 120 seconds yields null. volumeValuation distinguishes nominal USDG denomination from recorded historical WETH oracle estimates. Keep source ages, coverage reasons and nulls. stateCurrent requires a valid state observation within ten minutes. A v4 pool has a pool id within PoolManager; a v3 pool has a contract address. Discovery reports each venue's scan progress; unscanned history can contain pools absent from this list.",
     annotations: READ_ANNOTATIONS,
     inputSchema: { symbol: z.string().describe("Ticker, e.g. TSLA") },
   },
@@ -282,7 +305,7 @@ server.registerTool(
   {
     title: "What each DEX venue contributes chain-wide",
     description:
-      "Which DEXs exist on this chain and what each is worth — ask before saying where a Stock Token trades, or when one venue's pool count looks implausibly low. One row per venue read (uniswap_v4, uniswap_v3), whether or not it has a pool on record yet, so venues and discovery name the same set: pools that trade a listed asset, how many carry a dollar price, depthUsd (the dollars it takes to move each priced pool's price 1%, added up), swaps and volume over the current UTC day and the one before it, and how many assets take their premium from a pool there. checkedAt is when the state read last priced a pool on that venue, headAt inside discovery when the chain head there was read. The Pons launchpad creates its pools on the Uniswap v3 factory, so they count as uniswap_v3. discovery carries each venue's scan position against the chain head; while readingHistory is true the counts are a floor, and while scanned is false the venue has not been read at all.",
+      "One row per tracked DEX venue, including venues with no recorded pools: pool counts, priced pools, assets priced there and discovery progress. Venue depthUsd sums quote-side holdings for v3 or bounded 1% quote estimates for v4. Keep the two measures separate; neither is TVL. Swap and volume fields require complete current rolling 24-hour coverage. Volume valuation distinguishes nominal USDG from historical WETH oracle estimates. checkedAt records pool-state observation time; discovery.headAt records the observed chain head. Counts remain partial while readingHistory is true. Pons launchpad pools created through the Uniswap v3 factory count under uniswap_v3.",
     annotations: READ_ANNOTATIONS,
     inputSchema: {},
   },

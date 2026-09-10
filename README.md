@@ -60,9 +60,11 @@ keeps at most 200 entries for at most ten minutes each.
 | `holders` | how much of a token is in investors' hands: the six shares (float, pools, issuer, bridge, contracts, unchecked, which add to 100), holders with share and address labels, ledger progress. Float is a floor: the probe checks holders above a ten-thousandth of supply |
 | `activity` | daily transfers, volume, DvP, off-hours |
 | `get_token` | resolve one exact mainnet address, retaining trust, metadata nulls and provenance |
+| `filter_catalog` | current market filter values, thresholds, labels and presets from the public API |
+| `token_markets` | paginated token contracts with combined filters, selected-pool readings, trust and source times; 25 or 50 rows |
 | `search_pools` | one filtered pool page, 20 rows by default, ordered by volume; no automatic full-registry load |
-| `pools` | pools trading one ticker on every DEX read (Uniswap v4 and v3), deepest first: venue, price, `depthUsd` (dollars that move the price 1%), raw liquidity L, premium to feed, and how far each venue's scan has read |
-| `dex_venues` | which DEXs exist on this chain and what each is worth: pools, dollar-priced pools, dollar depth at a 1% move, swaps and volume, assets priced there, and whether each venue has been read at all |
+| `pools` | pools trading one ticker on every DEX read (Uniswap v4 and v3), deepest first: venue, price, `depthUsd` (V3 quote holdings or V4 bounded 1% quote estimate), raw liquidity L, premium to feed, and how far each venue's scan has read |
+| `dex_venues` | tracked venues: pools, dollar-priced pools, distinct V3 quote holdings or V4 bounded 1% estimates, swaps and volume, assets priced there, and whether each venue has been read at all |
 | `bridge` | L1 escrow vs L2 supply, deposits, withdrawals |
 | `issuer_documents` | prospectus, Final Terms per ticker, watched pages |
 | `lookalikes` | tokens borrowing a listed ticker, with verdicts |
@@ -116,15 +118,17 @@ The tools read the deployed API; status timeliness does not mean all figures are
 fresh. Inspect `metadataBacklog`, coverage and each observation timestamp.
 `stateCurrent=false` means current pool price, depth, valuations and changes are
 unpublished; preserve their nulls. A ticker or lookalike match does not verify an
-address. Legacy swap fields may cover two UTC days; read the endpoint note rather
-than assuming exact rolling 24-hour volume. Historical USD valuation is not inferred.
+address. Pool swap fields require a complete current rolling 24-hour window.
+`volumeValuation` distinguishes nominal USDG denomination from historical WETH
+oracle estimates and retains source ages and coverage reasons.
 
 Use `get_token` for one address and `search_pools` for one bounded filtered page.
 The resources remain opt-in; the server never fetches the full registry automatically.
 [Full agent reference](https://fletch.now/llms-full.txt) and
 [live schema](https://fletch.now/api/v1/openapi.json) describe current behavior.
-The dated 5 September documents remain historical; `docs/openapi-2026-09-08.json`
-and `docs/llms-2026-09-08.txt` capture the deployed contract for this update.
+The dated 5 and 8 September documents remain historical;
+`docs/openapi-2026-09-10.json` and `docs/llms-2026-09-10.txt` capture the deployed
+contract for this update. `docs/SNAPSHOT-2026-09-10.md` records fetch times and hashes.
 
 All tools declare read-only, non-destructive, idempotent, open-world annotations.
 These are client hints; account routes still enforce their own authentication.
@@ -132,3 +136,15 @@ Token resolution may refresh server-side metadata observations without changing
 an account or sending a chain transaction. Changelog cursor reads return the full
 sequence: apply kind/symbol filters locally and preserve `nextCursor` after each
 processed batch. No returned events does not establish indexing health.
+
+## Market filter contract
+
+Call `filter_catalog` to discover the same filter options used by Markets, then
+pass a combination to `token_markets`. Filters combine with AND. Numeric sorts
+put unavailable observations last; a zero minimum still requires a usable
+reading. V3 quote holdings and V4 bounded 1% depth remain separate measures.
+
+The input enums in `generated/market-filters.json` are generated from the public
+catalog. After the matching API release is active, run `npm run generate:filters`
+and the offline tests before publishing a client update. No market observations
+are bundled in that catalog.

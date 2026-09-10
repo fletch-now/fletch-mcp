@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add `filter_catalog` and paginated `token_markets`, with enums generated from the shared public catalog. Preserve read-only credential isolation.
+- Refresh dated live API snapshots on 10 September 2026 and align pool descriptions with separate V3/V4 depth measures and rolling swap coverage. npm publication remains pending.
+
+
 ## 0.2.0 — 2026-09-08 (prepared)
 
 - Refuse redirects, redact configured credentials and omit upstream failure bodies; declare read-only tool annotations.

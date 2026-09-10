@@ -1,0 +1,255 @@
+{
+  "chainId": 4663,
+  "version": 1,
+  "scope": "Priority token contracts. Activity and volume cover each token's selected pool.",
+  "combination": "All supplied filters must match. Missing or invalidated measures never satisfy a numeric filter, including a zero threshold.",
+  "ordering": "Numeric sorts descend, with unavailable values last. Ties use name and address. Depth measures remain separate.",
+  "filters": {
+    "kind": {
+      "label": "Tokens",
+      "default": "all",
+      "options": [
+        {
+          "value": "all",
+          "label": "All tokens",
+          "description": "Issuer listings and priority community contracts."
+        },
+        {
+          "value": "listed",
+          "label": "Listed",
+          "description": "Contracts in the issuer list, including pending checks."
+        },
+        {
+          "value": "community",
+          "label": "Community",
+          "description": "Priority contracts outside the issuer list. Check their trust badge."
+        }
+      ]
+    },
+    "trust": {
+      "label": "Trust",
+      "default": "all",
+      "options": [
+        {
+          "value": "all",
+          "label": "All verdicts",
+          "description": "Keep every recorded identity verdict."
+        },
+        {
+          "value": "verified",
+          "label": "Verified",
+          "description": "Issuer listing and matching contract checks."
+        },
+        {
+          "value": "listed",
+          "label": "Listed",
+          "description": "Issuer listing with checks still incomplete."
+        },
+        {
+          "value": "community",
+          "label": "Community",
+          "description": "Resolved metadata with no recorded issuer-name collision."
+        },
+        {
+          "value": "lookalike",
+          "label": "Lookalike",
+          "description": "Name or symbol collides with a verified asset."
+        },
+        {
+          "value": "unknown",
+          "label": "Unknown",
+          "description": "Identity calls have not resolved this contract."
+        }
+      ]
+    },
+    "sort": {
+      "label": "Sort",
+      "default": "volume",
+      "options": [
+        {
+          "value": "volume",
+          "label": "24h volume",
+          "description": "Selected-pool USD volume, highest first."
+        },
+        {
+          "value": "swaps",
+          "label": "24h swaps",
+          "description": "Selected-pool swap events, highest first."
+        },
+        {
+          "value": "market_cap",
+          "label": "Market cap estimate",
+          "description": "Outstanding supply estimate times current price, highest first."
+        },
+        {
+          "value": "v3_depth",
+          "label": "V3 quote holdings",
+          "description": "Observed quote-side holdings in dollars, highest first."
+        },
+        {
+          "value": "v4_depth",
+          "label": "V4 1% depth",
+          "description": "Bounded quote input for a 1% move, highest first."
+        },
+        {
+          "value": "name",
+          "label": "Name",
+          "description": "Alphabetical name, then contract address."
+        }
+      ]
+    },
+    "activity": {
+      "label": "Activity",
+      "default": "all",
+      "options": [
+        {
+          "value": "all",
+          "label": "Any activity",
+          "description": "Include incomplete and unavailable swap windows."
+        },
+        {
+          "value": "traded",
+          "label": "Traded in 24h",
+          "description": "At least one swap in a complete current 24-hour window."
+        },
+        {
+          "value": "busy",
+          "label": "100+ swaps in 24h",
+          "description": "At least 100 swaps in a complete current window."
+        },
+        {
+          "value": "quiet",
+          "label": "Zero swaps in 24h",
+          "description": "A complete current window with exactly zero swaps."
+        }
+      ]
+    },
+    "data": {
+      "label": "Readings",
+      "default": "all",
+      "options": [
+        {
+          "value": "all",
+          "label": "All readings",
+          "description": "Keep unavailable measures with their reason."
+        },
+        {
+          "value": "priced",
+          "label": "Current price",
+          "description": "Usable selected-pool price observed within 15 minutes."
+        },
+        {
+          "value": "volume",
+          "label": "Complete 24h volume",
+          "description": "Valued 24-hour window counted through the last two minutes."
+        },
+        {
+          "value": "complete",
+          "label": "Price, volume and cap",
+          "description": "All three measures have usable current inputs."
+        }
+      ]
+    },
+    "depth": {
+      "label": "Depth",
+      "default": "all",
+      "options": [
+        {
+          "value": "all",
+          "label": "Any depth",
+          "description": "Keep both pool types and unavailable observations."
+        },
+        {
+          "value": "v3_10k",
+          "label": "V3 holdings $10k+",
+          "description": "At least $10,000 of current quote-side holdings."
+        },
+        {
+          "value": "v3_100k",
+          "label": "V3 holdings $100k+",
+          "description": "At least $100,000 of current quote-side holdings."
+        },
+        {
+          "value": "v4_1k",
+          "label": "V4 1% depth $1k+",
+          "description": "At least $1,000 of bounded quote input for a 1% move."
+        },
+        {
+          "value": "v4_10k",
+          "label": "V4 1% depth $10k+",
+          "description": "At least $10,000 of bounded quote input for a 1% move."
+        }
+      ]
+    },
+    "identity": {
+      "label": "Identity",
+      "default": "all",
+      "options": [
+        {
+          "value": "all",
+          "label": "All contracts",
+          "description": "One row per recorded priority contract."
+        },
+        {
+          "value": "dominant",
+          "label": "Leading community contracts",
+          "description": "Community contracts selected by the recorded economic comparison."
+        },
+        {
+          "value": "same_name",
+          "label": "Same-name alternatives",
+          "description": "Contracts with alternatives in the recorded comparison set."
+        },
+        {
+          "value": "close_call",
+          "label": "Close comparisons",
+          "description": "The dominance comparison recorded a close call."
+        }
+      ]
+    }
+  },
+  "minVolumeUsd": {
+    "label": "Minimum 24h volume",
+    "minimum": 0,
+    "maximum": 1000000000000,
+    "description": "Inclusive selected-pool USD volume threshold. Requires a complete current valued window."
+  },
+  "presets": [
+    {
+      "label": "Most traded",
+      "query": {
+        "sort": "volume",
+        "activity": "traded"
+      }
+    },
+    {
+      "label": "Community activity",
+      "query": {
+        "kind": "community",
+        "activity": "traded",
+        "sort": "volume"
+      }
+    },
+    {
+      "label": "100+ daily swaps",
+      "query": {
+        "activity": "busy",
+        "sort": "swaps"
+      }
+    },
+    {
+      "label": "Current market data",
+      "query": {
+        "data": "complete",
+        "sort": "volume"
+      }
+    },
+    {
+      "label": "Compare names",
+      "query": {
+        "identity": "same_name",
+        "sort": "volume"
+      }
+    }
+  ]
+}
