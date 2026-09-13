@@ -24,6 +24,7 @@ const { version } = JSON.parse(readFileSync(new URL("../package.json", import.me
 const TOOL_NAMES = [
   "status",
   "token_markets",
+  "app_catalog",
   "filter_catalog",
   "list_assets",
   "get_asset",
@@ -94,7 +95,7 @@ function startFake(scheme = "http") {
       response.end(JSON.stringify({ address: request.url.split("/").at(-1), trust: "unknown", symbol: null }));
       return;
     }
-    if (request.url.startsWith("/api/v1/chains/4663/markets")) {
+    if (request.url.startsWith("/api/v1/chains/4663/markets") || request.url.startsWith("/api/v1/chains/4663/app-catalog")) {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({ path: request.url, items: [], total: 0 }));
       return;
@@ -131,7 +132,7 @@ describe("over stdio against a local server", () => {
     fake.server.close();
   });
 
-  test("registers 21 tools and 2 resources", async () => {
+  test("registers 22 tools and 2 resources", async () => {
     const { tools } = await client.listTools();
     assert.deepEqual(tools.map((tool) => tool.name).sort(), [...TOOL_NAMES].sort());
     for (const tool of tools) {
@@ -172,6 +173,19 @@ describe("over stdio against a local server", () => {
     const before = fake.seen.length;
     const invalid = await client.callTool({ name: "token_markets", arguments: { sort: "invented_sort" } });
     assert.equal(invalid.isError, true);
+    assert.equal(fake.seen.length, before);
+  });
+
+  test("app catalog preserves query and refuses invalid status before sending", async () => {
+    parse(await client.callTool({ name: "app_catalog", arguments: { q: "FRONG", status: "display_only", offset: 200, limit: 100 } }));
+    const request = fake.seen.at(-1);
+    const url = new URL(request.path, fake.url);
+    assert.equal(url.pathname, "/api/v1/chains/4663/app-catalog");
+    assert.equal(url.searchParams.get("status"), "display_only");
+    assert.equal(url.searchParams.get("offset"), "200");
+    assert.equal(request.headers.authorization, undefined);
+    const before = fake.seen.length;
+    assert.equal((await client.callTool({ name: "app_catalog", arguments: { status: "listed" } })).isError, true);
     assert.equal(fake.seen.length, before);
   });
 

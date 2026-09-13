@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 - 2026-09-13
+
+Add Robinhood app catalog reads with pagination, account trading availability,
+source age and stale/error flags. Market responses include app status and stock
+pairing verdicts. Refresh the public schema and agent examples; document listing
+events, watcher baseline suppression and continuous-stream cursor handling.
+
+
 ## Unreleased
 
 - Add `filter_catalog` and paginated `token_markets`, with enums generated from the shared public catalog. Preserve read-only credential isolation.

@@ -148,9 +148,20 @@ server.registerTool("filter_catalog", {
   annotations: READ_ANNOTATIONS,
   inputSchema: {},
 }, async function catalog() { return text(await get(`/api/v1/chains/${CHAIN_ID}/markets/filters`)); });
+server.registerTool("app_catalog", {
+  title: "Robinhood app catalog",
+  description: "Read app tradability with source, observedAt, ageSeconds, stale and error. Display-only is a price feed without app trading. Per-account availability remains in pairs. Includes symbols without an on-chain match; a catalog ticker does not verify a contract. Follow nextOffset with offset until null. Use token_markets for contract observations. Reads one page, at most 200 symbols.",
+  annotations: READ_ANNOTATIONS,
+  inputSchema: {
+    q: z.string().max(128).optional().describe("Catalog symbol or name"),
+    status: z.enum(["tradable", "display_only", "unavailable"]).optional(),
+    limit: z.number().int().min(1).max(200).optional(),
+    offset: z.number().int().min(0).max(1000000).optional(),
+  },
+}, async function appCatalog(params) { return text(await get(`/api/v1/chains/${CHAIN_ID}/app-catalog${query(params)}`)); });
 server.registerTool("token_markets", {
   title: "Token markets",
-  description: "Read one bounded page of issuer-listed and priority community contracts, default 25 rows. Each metric carries observation.sourceId, blockNumber/hash, sourceAt, fetchedAt, expiresAt, method, parameters, inputs, coverage, status and readStatus. Compare expiresAt with the current time; retained values may coexist with failed refreshes. Market cap expires with its earliest required input. Selection has selectedAt, expiresAt and a versioned policy; economic dominance does not verify identity. Use filter_catalog for combinations. V3 quote holdings and V4 1% depth remain separate.",
+  description: "Read one bounded page of issuer-listed and priority community contracts, default 25 rows. Each metric carries observation.sourceId, blockNumber/hash, sourceAt, fetchedAt, expiresAt, method, parameters, inputs, coverage, status and readStatus. Compare expiresAt with the current time; retained values may coexist with failed refreshes. Market cap expires with its earliest required input. Selection has selectedAt, expiresAt and a versioned policy; economic dominance does not verify identity. robinhoodApp separates app tradability from contract trust; stockPairings records canonical, lookalike or unconfirmed stock sides. catalogMatches retains unmatched catalog symbols. Use filter_catalog for combinations. V3 quote holdings and V4 1% depth remain separate.",
   annotations: READ_ANNOTATIONS,
   inputSchema: {
     ...marketInput,

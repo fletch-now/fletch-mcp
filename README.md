@@ -33,6 +33,20 @@ Claude Desktop, Claude Code, Cursor and any other MCP client take a stdio server
 
 Claude Code: `claude mcp add fletch -- npx -y github:fletch-now/fletch-mcp`.
 
+## Catalog workflow
+
+1. Call `app_catalog` with `{ "q": "FRONG" }` for app status and source age.
+2. Call `token_markets` with the same query for contracts, price, volume,
+   capitalization and their observation records.
+3. Call `events` with `{ "kind": "listing.", "limit": 10 }` for recent observations.
+4. Check `status` for pending searches, contract checks and stale jobs.
+
+`display_only` means a price feed without app trading. `tradable` follows the
+catalog fields; per-account restrictions remain in `pairs`. No contract match
+is a valid result. A ticker match does not verify identity. Follow `nextOffset`
+with `offset` to read another catalog page. Source errors and ages remain visible.
+The API stream supports continuous delivery; this MCP tool reads one bounded page.
+
 ## Environment
 
 - `FLETCH_API_URL`: where the API lives. Default `https://fletch.now`.
@@ -61,6 +75,7 @@ keeps at most 200 entries for at most ten minutes each.
 | `activity` | daily transfers, volume, DvP, off-hours |
 | `get_token` | resolve one exact mainnet address, retaining trust, metadata nulls and provenance |
 | `filter_catalog` | current market filter values, thresholds, labels and presets from the public API |
+| `app_catalog` | Robinhood app status, account availability, source and age; q/status filters and offset pagination |
 | `token_markets` | paginated token contracts with combined filters, selected-pool readings, trust and source times; 25 or 50 rows |
 | `search_pools` | one filtered pool page, 20 rows by default, ordered by volume; no automatic full-registry load |
 | `pools` | pools trading one ticker on every DEX read (Uniswap v4 and v3), deepest first: venue, price, `depthUsd` (V3 quote holdings or V4 bounded 1% quote estimate), raw liquidity L, premium to feed, and how far each venue's scan has read |
@@ -128,7 +143,7 @@ The resources remain opt-in; the server never fetches the full registry automati
 [live schema](https://fletch.now/api/v1/openapi.json) describe current behavior.
 The dated 5 and 8 September documents remain historical;
 `docs/openapi-2026-09-10.json` and `docs/llms-2026-09-10.txt` capture the deployed
-contract for this update. `docs/SNAPSHOT-2026-09-10.md` records fetch times and hashes.
+contract for that historical update. The 13 September catalog update is recorded in `docs/SNAPSHOT-2026-09-13.md`. `docs/SNAPSHOT-2026-09-10.md` records fetch times and hashes.
 
 All tools declare read-only, non-destructive, idempotent, open-world annotations.
 These are client hints; account routes still enforce their own authentication.

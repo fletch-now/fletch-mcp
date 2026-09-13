@@ -1,12 +1,22 @@
 {
   "name": "fletch-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP server for Fletch's Robinhood Chain registry: verified Stock Token addresses, live state, Chainlink rounds, lookalikes, the issuer's control plane and the changelog.",
   "license": "MIT",
   "type": "module",
-  "bin": { "fletch-mcp": "./index.mjs" },
-  "files": ["index.mjs", "generated/market-filters.json", "README.md", "LICENSE", "CHANGELOG.md"],
-  "engines": { "node": ">=20" },
+  "bin": {
+    "fletch-mcp": "./index.mjs"
+  },
+  "files": [
+    "index.mjs",
+    "generated/market-filters.json",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node index.mjs",
     "generate:filters": "node scripts/generate-market-filters.mjs",
@@ -16,8 +26,20 @@
     "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "^3.25.0"
   },
-  "repository": { "type": "git", "url": "https://github.com/fletch-now/fletch-mcp" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fletch-now/fletch-mcp"
+  },
   "homepage": "https://fletch.now",
-  "bugs": { "url": "https://github.com/fletch-now/fletch-mcp/issues" },
-  "keywords": ["mcp", "model-context-protocol", "robinhood-chain", "stock-tokens", "chainlink", "fletch"]
+  "bugs": {
+    "url": "https://github.com/fletch-now/fletch-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "robinhood-chain",
+    "stock-tokens",
+    "chainlink",
+    "fletch"
+  ]
 }
