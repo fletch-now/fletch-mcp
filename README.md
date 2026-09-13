@@ -75,7 +75,8 @@ keeps at most 200 entries for at most ten minutes each.
 | `activity` | daily transfers, volume, DvP, off-hours |
 | `get_token` | resolve one exact mainnet address, retaining trust, metadata nulls and provenance |
 | `filter_catalog` | current market filter values, thresholds, labels and presets from the public API |
-| `app_catalog` | Robinhood app status, account availability, source and age; q/status filters and offset pagination |
+| `app_catalog` | Robinhood crypto-catalog status, scope, account availability, source and age; q/status filters and offset pagination |
+| `stock_pairings` | all discovered stock/community pools, stable IDs, metadata status and complete filtered counts; address/limit/offset pagination |
 | `token_markets` | paginated token contracts with combined filters, selected-pool readings, trust and source times; 25 or 50 rows |
 | `search_pools` | one filtered pool page, 20 rows by default, ordered by volume; no automatic full-registry load |
 | `pools` | pools trading one ticker on every DEX read (Uniswap v4 and v3), deepest first: venue, price, `depthUsd` (V3 quote holdings or V4 bounded 1% quote estimate), raw liquidity L, premium to feed, and how far each venue's scan has read |
@@ -187,3 +188,33 @@ refresh older metrics. The server forwards these facts unchanged using only the
 requested tool read; schema and full documentation resources remain opt-in.
 
 The reliability release's exact public schema snapshot and source hashes are in [the snapshot record](docs/SNAPSHOT-2026-09-10-reliability.md).
+
+### Stock Token identity and discovered pools
+
+Call `stock_pairings` with
+`{"address":"0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec","limit":50,"offset":0}`
+for NVDA's discovered stock/community pools. Follow `nextOffset` until null;
+`token_markets` includes at most three grouped examples and full counts in
+`stockPairingSummary`. Deduplicate pages using stable pairing `id`, since new
+observations can reorder a live catalog. Metadata may be pending, failed or stale;
+an unknown symbol or missing swap stays null.
+
+`robinhoodApp.scope` is `crypto_currency_pairs`, which excludes the separate
+Stock Token list. `not_covered` is the Stock Token result; legacy `not_in_app`
+means absent from this crypto source only. Read `stockToken` for independently
+verified list membership, address and source age. A ticker alone cannot verify
+an app contract or establish issuer origin.
+
+Crypto-catalog reads target 15 seconds; the separate Stock Token list sync targets
+15 minutes. Six-hour `canonical` checks observe listed contracts’ beacon
+dependencies and code. Preserve each source and verification time separately.
+
+`status.lookalikes` exposes completed/pending/failed searches and beacon backlogs
+at `measuredAt`. Minute-level worker passes can still have unfinished catalog coverage; inspect
+completed, pending and failed counts instead of treating cadence as full coverage.
+The Status `swaps` figure is the count in complete current 24-hour windows for
+selected canonical pools, with that scope stated in its description and unit.
+
+The `lookalikes` tool also accepts `kind`, `limit` and `offset`. Follow `nextOffset`
+for all matching contracts. The legacy `unlisted_stock` filter maps to
+`unverified`; a matching beacon is dependency evidence, not proof of issuer deployment.

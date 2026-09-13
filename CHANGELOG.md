@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 - 2026-09-14 (prepared)
+
+Clarify crypto-catalog scope, `not_covered` Stock Token status and separate verified stock membership. Add paginated stock/community pairing reads with stable IDs, metadata coverage and complete filtered counts. Expose measured lookalike backfill coverage and preserve source ages. npm publication remains pending.
+
 ## 0.3.0 - 2026-09-13
 
 Add Robinhood app catalog reads with pagination, account trading availability,

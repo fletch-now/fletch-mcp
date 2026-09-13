@@ -25,6 +25,7 @@ const TOOL_NAMES = [
   "status",
   "token_markets",
   "app_catalog",
+  "stock_pairings",
   "filter_catalog",
   "list_assets",
   "get_asset",
@@ -95,7 +96,7 @@ function startFake(scheme = "http") {
       response.end(JSON.stringify({ address: request.url.split("/").at(-1), trust: "unknown", symbol: null }));
       return;
     }
-    if (request.url.startsWith("/api/v1/chains/4663/markets") || request.url.startsWith("/api/v1/chains/4663/app-catalog")) {
+    if (request.url.startsWith("/api/v1/chains/4663/markets") || request.url.startsWith("/api/v1/chains/4663/app-catalog") || request.url.startsWith("/api/v1/chains/4663/stock-pairings") || request.url.startsWith("/api/v1/chains/4663/lookalikes")) {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({ path: request.url, items: [], total: 0 }));
       return;
@@ -132,7 +133,7 @@ describe("over stdio against a local server", () => {
     fake.server.close();
   });
 
-  test("registers 22 tools and 2 resources", async () => {
+  test("registers 23 tools and 2 resources", async () => {
     const { tools } = await client.listTools();
     assert.deepEqual(tools.map((tool) => tool.name).sort(), [...TOOL_NAMES].sort());
     for (const tool of tools) {
@@ -189,6 +190,55 @@ describe("over stdio against a local server", () => {
     assert.equal(fake.seen.length, before);
   });
 
+  test("stock pairing tool preserves pagination and rejects unbounded or invalid inputs", async () => {
+    const address = "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec";
+    parse(await client.callTool({ name: "stock_pairings", arguments: { address, offset: 50, limit: 50 } }));
+    const request = fake.seen.at(-1);
+    const url = new URL(request.path, fake.url);
+    assert.equal(url.pathname, "/api/v1/chains/4663/stock-pairings");
+    assert.equal(url.searchParams.get("address"), address);
+    assert.equal(url.searchParams.get("offset"), "50");
+    assert.equal(url.searchParams.get("limit"), "50");
+    assert.equal(request.headers.authorization, undefined);
+    const before = fake.seen.length;
+    for (const arguments_ of [{ address: "NVDA" }, { limit: 101 }, { offset: -1 }]) {
+      assert.equal((await client.callTool({ name: "stock_pairings", arguments: arguments_ })).isError, true);
+    }
+    assert.equal(fake.seen.length, before);
+  });
+
+  test("lookalikes preserves kind and pagination without inferring issuer origin", async () => {
+    parse(await client.callTool({ name: "lookalikes", arguments: { symbol: "NVDA", kind: "unverified", offset: 50, limit: 25 } }));
+    const url = new URL(fake.seen.at(-1).path, fake.url);
+    assert.equal(url.pathname, "/api/v1/chains/4663/lookalikes");
+    assert.equal(url.searchParams.get("symbol"), "NVDA");
+    assert.equal(url.searchParams.get("kind"), "unverified");
+    assert.equal(url.searchParams.get("offset"), "50");
+    const before = fake.seen.length;
+    assert.equal((await client.callTool({ name: "lookalikes", arguments: { kind: "issuer_deployed" } })).isError, true);
+    assert.equal(fake.seen.length, before);
+  });
+
+  test("tools retain crypto non-coverage, stock verification and measured backfill coverage", async () => {
+    const token = { robinhoodApp: { status: "not_covered", scope: "crypto_currency_pairs", reason: "Stock Tokens use a separate list" },
+      stockToken: { verified: true }, stockPairings: [{ id: "pool:stock", communitySymbol: null, metadataStatus: "pending", lastSwapAt: null }] };
+    const status = { lookalikes: { assets: 205, completed: 10, pending: 195, failed: 1, measuredAt: "2026-09-14T00:00:00Z" } };
+    fake.setResponse((request, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(request.url.includes("/status") ? status : { items: [token] }));
+    });
+    try {
+      assert.deepEqual(parse(await client.callTool({ name: "token_markets", arguments: { q: "NVDA" } })).items[0], token);
+      assert.deepEqual(parse(await client.callTool({ name: "status", arguments: {} })), status);
+      const { tools } = await client.listTools();
+      assert.match(tools.find(tool => tool.name === "token_markets").description, /not_covered/);
+      assert.match(tools.find(tool => tool.name === "app_catalog").description, /crypto currency pairs/);
+      assert.match(tools.find(tool => tool.name === "status").description, /lookalikes/);
+    } finally {
+      fake.setResponse(null);
+    }
+  });
+
   test("sends the versioned user-agent and no bearer on a registry read", async () => {
     const first = parse(await client.callTool({ name: "status", arguments: {} }));
     assert.equal(first.verdict, "live");
@@ -199,12 +249,13 @@ describe("over stdio against a local server", () => {
   });
 
   test("revalidates by ETag and serves the cached body on 304", async () => {
+    const first = parse(await client.callTool({ name: "status", arguments: {} }));
     const before = fake.seen.length;
     const again = parse(await client.callTool({ name: "status", arguments: {} }));
     const request = fake.seen.at(-1);
     assert.equal(fake.seen.length, before + 1);
     assert.equal(request.headers["if-none-match"], '"s1"');
-    assert.equal(again.served, fake.seen.findIndex(request => request.path === "/api/v1/status") + 1, "the body must be the one cached from the first 200");
+    assert.deepEqual(again, first, "the body must be the cached snapshot, without a new observation time");
   });
 
   test("preserves metric inputs, selection expiry and partial status coverage with narrow reads", async () => {

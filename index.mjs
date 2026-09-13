@@ -149,8 +149,8 @@ server.registerTool("filter_catalog", {
   inputSchema: {},
 }, async function catalog() { return text(await get(`/api/v1/chains/${CHAIN_ID}/markets/filters`)); });
 server.registerTool("app_catalog", {
-  title: "Robinhood app catalog",
-  description: "Read app tradability with source, observedAt, ageSeconds, stale and error. Display-only is a price feed without app trading. Per-account availability remains in pairs. Includes symbols without an on-chain match; a catalog ticker does not verify a contract. Follow nextOffset with offset until null. Use token_markets for contract observations. Reads one page, at most 200 symbols.",
+  title: "Robinhood crypto catalog",
+  description: "Read crypto-catalog availability with scope, source, observedAt, ageSeconds, stale and error. The source covers crypto currency pairs, not the separate Stock Token list or the entire Robinhood app. Display-only is a price feed without app trading; per-account restrictions remain in pairs. A catalog ticker does not verify a contract. Follow nextOffset with offset until null. Use token_markets for contract observations and separate stockToken identity. Reads one page, at most 200 symbols.",
   annotations: READ_ANNOTATIONS,
   inputSchema: {
     q: z.string().max(128).optional().describe("Catalog symbol or name"),
@@ -159,9 +159,19 @@ server.registerTool("app_catalog", {
     offset: z.number().int().min(0).max(1000000).optional(),
   },
 }, async function appCatalog(params) { return text(await get(`/api/v1/chains/${CHAIN_ID}/app-catalog${query(params)}`)); });
+server.registerTool("stock_pairings", {
+  title: "Stock and community pools",
+  description: "Read discovered stock/community pools with stable pairing and pool identifiers, stock-side canonical/lookalike/unconfirmed verdicts, counterparty addresses and metadata status/age/errors. Follow nextOffset using offset until null for all pools; token_markets contains at most three grouped examples plus stockPairingSummary. Optional address matches the stock, canonical stock or counterparty. Ranking uses latest recorded swap, then resolved metadata, creation block and pool ID. A missing symbol or swap remains unknown; a discovered pool does not establish trading activity. Summary counts cover the full filter and carry asOf. Pages use current observations and can change between reads.",
+  annotations: READ_ANNOTATIONS,
+  inputSchema: {
+    address: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional().describe("Stock or community token contract address"),
+    limit: z.number().int().min(1).max(100).optional(),
+    offset: z.number().int().min(0).max(1000000).optional(),
+  },
+}, async function stockPairings(params) { return text(await get(`/api/v1/chains/${CHAIN_ID}/stock-pairings${query(params)}`)); });
 server.registerTool("token_markets", {
   title: "Token markets",
-  description: "Read one bounded page of issuer-listed and priority community contracts, default 25 rows. Each metric carries observation.sourceId, blockNumber/hash, sourceAt, fetchedAt, expiresAt, method, parameters, inputs, coverage, status and readStatus. Compare expiresAt with the current time; retained values may coexist with failed refreshes. Market cap expires with its earliest required input. Selection has selectedAt, expiresAt and a versioned policy; economic dominance does not verify identity. robinhoodApp separates app tradability from contract trust; stockPairings records canonical, lookalike or unconfirmed stock sides. catalogMatches retains unmatched catalog symbols. Use filter_catalog for combinations. V3 quote holdings and V4 1% depth remain separate.",
+  description: "Read one bounded page of issuer-listed and priority community contracts, default 25 rows. Each metric carries observation.sourceId, blockNumber/hash, sourceAt, fetchedAt, expiresAt, method, parameters, inputs, coverage, status and readStatus. Compare expiresAt with the current time; retained values may coexist with failed refreshes. Market cap expires with its earliest required input. Selection has selectedAt, expiresAt and a versioned policy; economic dominance does not verify identity. robinhoodApp.scope is crypto_currency_pairs; not_covered means this source does not cover Stock Tokens. Legacy not_in_app only means absent from that crypto source. stockToken separately records verified Stock Token membership and its source age. stockPairings contains at most three grouped examples; use stock_pairings for all pools and inspect stockPairingSummary. catalogMatches retains unmatched catalog symbols. Use filter_catalog for combinations. V3 quote holdings and V4 1% depth remain separate.",
   annotations: READ_ANNOTATIONS,
   inputSchema: {
     ...marketInput,
@@ -177,7 +187,7 @@ server.registerTool(
   {
     title: "Registry freshness",
     description:
-      "Freshness of everything Fletch publishes: the daemon's heartbeat, each of the registry's jobs against the cadence it should run at (verdict fresh, late, failing, filling, stalled or never; a figure can also be unread), the scanners still reading chain history with how long they have left, and the age of every figure. Call this before trusting a number whose freshness matters. A live verdict means jobs ran on schedule, not that all rows or figures are current. metadataBacklog records due, visibleDue and neverRead counts at measuredAt. Each job metricCoverage records eligible, current, failed, unread and oldestInputAgeSeconds at measuredAt; current and failed can overlap after an unsuccessful refresh. Null coverage means unmeasured. Compare per-field observation times and coverage; a 'filling' job means its figures are partial, not wrong, and 'stalled' means a scanner's checkpoint has stopped moving, not that it is slow.",
+      "Freshness of everything Fletch publishes: the daemon's heartbeat, each of the registry's jobs against the cadence it should run at (verdict fresh, late, failing, filling, stalled or never; a figure can also be unread), the scanners still reading chain history with how long they have left, and the age of every figure. Call this before trusting a number whose freshness matters. A live verdict means jobs ran on schedule, not that all rows or figures are current. metadataBacklog records due, visibleDue and neverRead counts at measuredAt. Each job metricCoverage records eligible, current, failed, unread and oldestInputAgeSeconds at measuredAt; current and failed can overlap after an unsuccessful refresh. Null coverage means unmeasured. lookalikes reports completed/pending/failed search counts, localCompletedAt and beacon backlogs at measuredAt; a successful bounded pass does not complete all searches. The swaps figure counts complete current 24-hour selected-pool windows. Scouting and swap tier counts come from durable worker receipts: inspect scouting.receiptStatus and swapIndexer.catalogStatus/catalogMeasuredAt. Missing receipts yield scouting null and tiers [], not zero catalog counts; live-tail state is read separately. Compare per-field observation times and coverage; a 'filling' job means its figures are partial, not wrong, and 'stalled' means a scanner's checkpoint has stopped moving, not that it is slow.",
     annotations: READ_ANNOTATIONS,
     inputSchema: {},
   },
@@ -350,11 +360,16 @@ server.registerTool(
   {
     title: "Lookalike tokens",
     description:
-      "ERC-20s on Robinhood Chain that borrow a listed ticker or exact name at another address, most held first, with the recorded collision verdict and evidence. A matching beacon is a dependency observation and does not establish issuer deployment; legacy unlisted_stock records are returned as unverified. Official listing or separately verified deployment evidence is required for issuer origin. Filter by symbol.",
+      "ERC-20s on Robinhood Chain that borrow a listed ticker or exact name at another address, most held first, with the recorded collision verdict and evidence. A matching beacon is a dependency observation and does not establish issuer deployment; legacy unlisted_stock records and filters normalize to unverified. Official listing or separately verified deployment evidence is required for issuer origin. Filter by symbol and kind; follow nextOffset as offset until null. Read one bounded page; preserve total, limit and offset.",
     annotations: READ_ANNOTATIONS,
-    inputSchema: { symbol: z.string().optional().describe("Ticker, e.g. TSLA"), limit: z.number().int().min(1).max(1000).optional() },
+    inputSchema: {
+      symbol: z.string().optional().describe("Ticker, e.g. TSLA"),
+      kind: z.enum(["impostor", "same_ticker", "unverified", "unlisted_stock"]).optional(),
+      limit: z.number().int().min(1).max(1000).optional(),
+      offset: z.number().int().min(0).max(1000000).optional(),
+    },
   },
-  async ({ symbol, limit }) => text(await get(`/api/v1/chains/${CHAIN_ID}/lookalikes${query({ symbol, limit })}`)),
+  async (params) => text(await get(`/api/v1/chains/${CHAIN_ID}/lookalikes${query(params)}`)),
 );
 
 server.registerTool(
