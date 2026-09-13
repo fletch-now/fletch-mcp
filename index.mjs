@@ -171,7 +171,7 @@ server.registerTool("stock_pairings", {
 }, async function stockPairings(params) { return text(await get(`/api/v1/chains/${CHAIN_ID}/stock-pairings${query(params)}`)); });
 server.registerTool("token_markets", {
   title: "Token markets",
-  description: "Read one bounded page of issuer-listed and priority community contracts, default 25 rows. Each metric carries observation.sourceId, blockNumber/hash, sourceAt, fetchedAt, expiresAt, method, parameters, inputs, coverage, status and readStatus. Compare expiresAt with the current time; retained values may coexist with failed refreshes. Market cap expires with its earliest required input. Selection has selectedAt, expiresAt and a versioned policy; economic dominance does not verify identity. robinhoodApp.scope is crypto_currency_pairs; not_covered means this source does not cover Stock Tokens. Legacy not_in_app only means absent from that crypto source. stockToken separately records verified Stock Token membership and its source age. stockPairings contains at most three grouped examples; use stock_pairings for all pools and inspect stockPairingSummary. catalogMatches retains unmatched catalog symbols. Use filter_catalog for combinations. V3 quote holdings and V4 1% depth remain separate.",
+  description: "Read one bounded page of issuer-listed and priority community contracts, default 25 rows. Each metric carries observation.sourceId, blockNumber/hash, sourceAt, fetchedAt, expiresAt, method, parameters, inputs, coverage, status and readStatus. Compare expiresAt with the current time; retained values may coexist with failed refreshes. Market cap expires with its earliest required input. Selection has selectedAt, expiresAt and a versioned policy; economic dominance does not verify identity. robinhoodApp.scope is crypto_currency_pairs; not_covered means this source does not cover Stock Tokens. Legacy not_in_app only means absent from that crypto source. stockToken separately records verified Stock Token membership and its source age. stockPairings contains at most three grouped examples; use stock_pairings for all pools and inspect stockPairingSummary. catalogMatches retains unmatched catalog symbols. Numeric sorting defaults to descending; order=asc or desc is explicit and unavailable values stay last. Price and pool-count sorts are supported. Global sorting precedes pagination. Raw observations can be shared for 10 seconds, with expiry recomputed on each response. Use filter_catalog for combinations. V3 quote holdings and V4 1% depth remain separate.",
   annotations: READ_ANNOTATIONS,
   inputSchema: {
     ...marketInput,
@@ -199,15 +199,22 @@ server.registerTool(
   {
     title: "List registry assets",
     description:
-      "Listed assets with their own trust verdicts on Robinhood Chain (chain 4663): Stock Tokens, bridged coins, USDG, WETH, each with its contract address, decimals, trust and observed state (multiplier, pauses, Chainlink price, holders, second-source agreement). Filter with q (symbol or name substring) or symbols (comma-separated exact tickers). fields adds lookalikes, corporateActions, multiplierHistory, feedRounds or concentration per asset, for up to 50 assets — concentration answers which Stock Tokens have the least float in one request.",
+      "Listed assets with their own trust verdicts on Robinhood Chain (chain 4663): Stock Tokens, bridged coins, USDG, WETH, each with its contract address, decimals, trust and observed state (multiplier, pauses, Chainlink price, holders, second-source agreement). Filter with q (symbol or name substring) or symbols (comma-separated exact tickers). Optional type/verified/state filters and sort/order apply before optional limit/offset pagination; follow nextOffset. Omit limit and offset to preserve the complete asset collection. Missing values remain last in both directions. fields adds lookalikes, corporateActions, multiplierHistory, feedRounds or concentration per asset, for up to 50 assets — concentration answers which Stock Tokens have the least float in one request.",
     annotations: READ_ANNOTATIONS,
     inputSchema: {
       q: z.string().optional().describe("Symbol or name substring"),
       symbols: z.string().optional().describe("Comma-separated tickers, e.g. TSLA,AAPL"),
       fields: z.string().optional().describe("Comma-separated extras: lookalikes,corporateActions,multiplierHistory,feedRounds,concentration"),
+      sort: z.enum(["symbol","name","type","address","verified","multiplier","price","lookalikes","state","newest","holders","float"]).optional(),
+      order: z.enum(["asc","desc"]).optional(),
+      type: z.enum(["all","stock_token","stablecoin","wrapped_native","bridged"]).optional(),
+      verified: z.enum(["0","1"]).optional(),
+      state: z.enum(["all","feed","stale","paused","halted","pending","residual","divergent","lookalikes"]).optional(),
+      limit: z.number().int().min(1).max(50).optional(),
+      offset: z.number().int().min(0).max(1000000).optional(),
     },
   },
-  async ({ q, symbols, fields }) => text(await get(`/api/v1/chains/${CHAIN_ID}/assets${query({ q, symbols, fields })}`)),
+  async (params) => text(await get(`/api/v1/chains/${CHAIN_ID}/assets${query(params)}`)),
 );
 
 server.registerTool(

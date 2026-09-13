@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2 - 2026-09-14 (prepared)
+
+Add ascending and descending price, volume, market-cap and pool-count sorting across complete filtered Markets results. Expose asset filters and optional pagination through SDK/MCP reads. Shared raw observations retain their source times; expiry and filtering are recomputed on every request. npm publication remains pending.
+
 ## 0.3.1 - 2026-09-14 (prepared)
 
 Clarify crypto-catalog scope, `not_covered` Stock Token status and separate verified stock membership. Add paginated stock/community pairing reads with stable IDs, metadata coverage and complete filtered counts. Expose measured lookalike backfill coverage and preserve source ages. npm publication remains pending.

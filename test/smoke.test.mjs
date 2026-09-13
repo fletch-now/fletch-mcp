@@ -96,7 +96,7 @@ function startFake(scheme = "http") {
       response.end(JSON.stringify({ address: request.url.split("/").at(-1), trust: "unknown", symbol: null }));
       return;
     }
-    if (request.url.startsWith("/api/v1/chains/4663/markets") || request.url.startsWith("/api/v1/chains/4663/app-catalog") || request.url.startsWith("/api/v1/chains/4663/stock-pairings") || request.url.startsWith("/api/v1/chains/4663/lookalikes")) {
+    if (request.url.startsWith("/api/v1/chains/4663/assets?") || request.url.startsWith("/api/v1/chains/4663/markets") || request.url.startsWith("/api/v1/chains/4663/app-catalog") || request.url.startsWith("/api/v1/chains/4663/stock-pairings") || request.url.startsWith("/api/v1/chains/4663/lookalikes")) {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({ path: request.url, items: [], total: 0 }));
       return;
@@ -163,18 +163,29 @@ describe("over stdio against a local server", () => {
     }
     parse(await client.callTool({ name: "filter_catalog", arguments: {} }));
     assert.equal(fake.seen.at(-1).path, "/api/v1/chains/4663/markets/filters");
-    parse(await client.callTool({ name: "token_markets", arguments: { kind: "community", activity: "traded", sort: "swaps", page: 2, pageSize: 25, minVolumeUsd: 0 } }));
+    parse(await client.callTool({ name: "token_markets", arguments: { kind: "community", activity: "traded", sort: "price", order: "asc", page: 2, pageSize: 25, minVolumeUsd: 0 } }));
     const request = fake.seen.at(-1);
     const url = new URL(request.path, fake.url);
     assert.equal(url.pathname, "/api/v1/chains/4663/markets");
     assert.equal(url.searchParams.get("minVolumeUsd"), "0");
-    assert.equal(url.searchParams.get("sort"), "swaps");
+    assert.equal(url.searchParams.get("sort"), "price");
+    assert.equal(url.searchParams.get("order"), "asc");
     assert.equal(url.searchParams.get("page"), "2");
     assert.equal(request.headers.authorization, undefined);
     const before = fake.seen.length;
     const invalid = await client.callTool({ name: "token_markets", arguments: { sort: "invented_sort" } });
     assert.equal(invalid.isError, true);
     assert.equal(fake.seen.length, before);
+  });
+
+  test("asset browsing retains filters, direction and bounded pagination", async () => {
+    parse(await client.callTool({name:"list_assets",arguments:{sort:"price",order:"asc",type:"stock_token",verified:"1",limit:25,offset:25}}));
+    const url=new URL(fake.seen.at(-1).path,fake.url);
+    assert.equal(url.searchParams.get("sort"),"price");assert.equal(url.searchParams.get("order"),"asc");
+    assert.equal(url.searchParams.get("verified"),"1");assert.equal(url.searchParams.get("offset"),"25");
+    const count=fake.seen.length;
+    assert.equal((await client.callTool({name:"list_assets",arguments:{limit:51}})).isError,true);
+    assert.equal(fake.seen.length,count);
   });
 
   test("app catalog preserves query and refuses invalid status before sending", async () => {

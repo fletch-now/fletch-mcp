@@ -3,7 +3,7 @@
   "version": 1,
   "scope": "Priority token contracts. Activity and volume cover each token's selected pool.",
   "combination": "All supplied filters must match. Missing or invalidated measures never satisfy a numeric filter, including a zero threshold.",
-  "ordering": "Numeric sorts descend, with unavailable values last. Ties use name and address. Depth measures remain separate.",
+  "ordering": "All matching rows are sorted before pagination. Numeric sorts default to descending; name defaults to ascending. Explicit order=asc or desc overrides direction. Unavailable values stay last in both directions. Numeric ties use contract address; name ties use address. Depth measures remain separate.",
   "filters": {
     "kind": {
       "label": "Tokens",
@@ -67,6 +67,16 @@
       "default": "volume",
       "options": [
         {
+          "value": "price",
+          "label": "Price",
+          "description": "Current selected-pool price in USD."
+        },
+        {
+          "value": "pools",
+          "label": "Pools",
+          "description": "Recorded canonical pool count."
+        },
+        {
           "value": "volume",
           "label": "24h volume",
           "description": "Selected-pool USD volume, highest first."
@@ -95,6 +105,22 @@
           "value": "name",
           "label": "Name",
           "description": "Alphabetical name, then contract address."
+        }
+      ]
+    },
+    "order": {
+      "label": "Direction",
+      "default": "desc",
+      "options": [
+        {
+          "value": "desc",
+          "label": "Highest first",
+          "description": "Descending values; unavailable readings remain last. Numeric sorts default to descending."
+        },
+        {
+          "value": "asc",
+          "label": "Lowest first",
+          "description": "Ascending values; unavailable readings remain last. Name sorting defaults to ascending when order is omitted."
         }
       ]
     },

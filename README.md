@@ -218,3 +218,19 @@ selected canonical pools, with that scope stated in its description and unit.
 The `lookalikes` tool also accepts `kind`, `limit` and `offset`. Follow `nextOffset`
 for all matching contracts. The legacy `unlisted_stock` filter maps to
 `unverified`; a matching beacon is dependency evidence, not proof of issuer deployment.
+
+
+### Sorting and pagination
+
+`token_markets` supports `sort: "price" | "volume" | "market_cap" | "pools"` plus
+existing sorts, and `order: "asc" | "desc"`. Numeric sorts default descending;
+name defaults ascending. Sorting covers all matching tokens before pagination,
+with unavailable values last and stable contract-address ties in either direction.
+
+`list_assets` also accepts `type`, `verified`, `state`, `sort`, `order`, `limit`
+(1–50) and `offset`. Supplying limit or offset enables a paginated response with
+`total` and `nextOffset`; omit both for the complete collection. Follow nextOffset.
+
+Nearby Markets requests can share raw database observations for ten seconds.
+Source ages, metric expiry and numeric filters are recomputed for each response;
+a repeated sort does not refresh upstream evidence. Pairing summaries retain asOf.
