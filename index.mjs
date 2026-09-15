@@ -183,6 +183,15 @@ server.registerTool("token_markets", {
   },
 }, async function markets(params) { return text(await get(`/api/v1/chains/${CHAIN_ID}/markets${query(params)}`)); });
 
+server.registerTool("token_discoveries", {
+  title: "Latest token discoveries",
+  description: "Read the latest addresses recorded by Fletch, including community tokens with readable contract metadata and authoritative assets. firstSeenAt is Fletch's earliest recorded observation, not contract creation, a Robinhood app listing or trading activity. metadataCheckedAt and asOf are separate timestamps. Each address retains its independent trust verdict. Hidden tokens are omitted. Reads a bounded recent window, default 20 and maximum 50; discovery coverage remains incomplete and responses may be shared for 15 seconds.",
+  annotations: READ_ANNOTATIONS,
+  inputSchema: { limit: z.number().int().min(1).max(50).optional() },
+}, async function tokenDiscoveries({ limit }) {
+  return text(await get(`/api/v1/chains/${CHAIN_ID}/discoveries${query({ limit: limit ?? 20 })}`));
+});
+
 server.registerTool("search_contracts", {
   title: "Search recorded contracts",
   description: "Search recorded assets, contract metadata, lookalike observations and explorer candidates, including addresses outside tracked Markets. Accepts tickers with optional $, name words in any order, ISIN, full or abbreviated addresses, chain-qualified addresses, explorer links and pool IDs or addresses. Pool queries return recorded token currencies. similar=true identifies fallback name or ticker suggestions after no literal match. Each result keeps its label source, observedAt, independent trust verdict and trackedMarket flag. A match does not verify identity; trackedMarket does not establish current price or volume. Missing metadata and unobserved times remain null. Read one page of 10 results by default, at most 50; increment page explicitly using total. Search results can be cached for 15 seconds; checkedAt is the search time and does not refresh the label's observedAt. No account credential is sent.",

@@ -24,6 +24,7 @@ const { version } = JSON.parse(readFileSync(new URL("../package.json", import.me
 const TOOL_NAMES = [
   "status",
   "token_markets",
+  "token_discoveries",
   "app_catalog",
   "stock_pairings",
   "filter_catalog",
@@ -187,6 +188,28 @@ describe("over stdio against a local server", () => {
     const count=fake.seen.length;
     assert.equal((await client.callTool({name:"list_assets",arguments:{limit:51}})).isError,true);
     assert.equal(fake.seen.length,count);
+  });
+
+  test("discoveries preserve observation times and trust, bound reads and omit account credentials", async () => {
+    const body = { asOf: "2026-09-15T08:49:00Z", items: [{ address: "0x" + "a".repeat(40), firstSeenAt: "2026-09-15T08:48:31Z", metadataCheckedAt: "2026-09-15T08:48:45Z", trust: "community" }], scope: "Fletch observations, not deployments" };
+    fake.setResponse((request, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(body));
+    });
+    try {
+      assert.deepEqual(parse(await client.callTool({ name: "token_discoveries", arguments: {} })), body);
+      assert.equal(fake.seen.at(-1).path, "/api/v1/chains/4663/discoveries?limit=20");
+      assert.equal(fake.seen.at(-1).headers.authorization, undefined);
+      assert.deepEqual(parse(await client.callTool({ name: "token_discoveries", arguments: { limit: 50 } })), body);
+      assert.equal(fake.seen.at(-1).path, "/api/v1/chains/4663/discoveries?limit=50");
+      const before = fake.seen.length;
+      for (const limit of [0, 51, 1.5]) {
+        assert.equal((await client.callTool({ name: "token_discoveries", arguments: { limit } })).isError, true);
+      }
+      assert.equal(fake.seen.length, before);
+    } finally {
+      fake.setResponse(null);
+    }
   });
 
   test("contract search preserves the query, bounds each page and sends no credential", async () => {

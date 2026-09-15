@@ -65,6 +65,7 @@ keeps at most 200 entries for at most ten minutes each.
 
 | Tool | Reads |
 |---|---|
+| `token_discoveries` | latest recorded addresses, including community tokens; first observation, metadata-check time and independent trust; 20 rows by default, at most 50 |
 | `search_contracts` | recorded contracts by ticker, name, address or supported link; bounded pages retain label sources and separate trust verdicts |
 | `status` | is the registry live: jobs, figures, ages, verdicts |
 | `list_assets` | every asset with state; `q`, `symbols`, `fields` (lookalikes, corporateActions, multiplierHistory, feedRounds, concentration) |
@@ -127,7 +128,7 @@ outside that test.
 
 `test:package` installs the npm tarball in a temporary application and runs the
 local stdio checks against its executable and installed dependencies. It checks
-all 24 tools, the resource definitions and credential handling without making
+all 25 tools, the resource definitions and credential handling without making
 live API requests. Dependency installation uses npm; the temporary application
 is removed when the check finishes.
 
@@ -151,7 +152,7 @@ The resources remain opt-in; the server never fetches the full registry automati
 [live schema](https://fletch.now/api/v1/openapi.json) describe current behavior.
 The dated 5 and 8 September documents remain historical;
 `docs/openapi-2026-09-10.json` and `docs/llms-2026-09-10.txt` capture the deployed
-contract for that historical update. The 13 September catalog update is recorded in `docs/SNAPSHOT-2026-09-13.md`. `docs/SNAPSHOT-2026-09-10.md` records fetch times and hashes.
+contract for that historical update. The latest checked contract, including token discoveries, is recorded in [the 15 September snapshot](docs/SNAPSHOT-2026-09-15.md). Older snapshot notes retain their original fetch times and hashes.
 
 All tools declare read-only, non-destructive, idempotent, open-world annotations.
 These are client hints; account routes still enforce their own authentication.
