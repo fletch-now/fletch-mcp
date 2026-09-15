@@ -32,3 +32,5 @@ jobs:
       # and resources, replays the ETag and bearer rules against local http and
       # https servers, and calls the status tool against https://fletch.now.
       - run: npm test
+      - name: Install and check the npm package
+        run: npm run test:package

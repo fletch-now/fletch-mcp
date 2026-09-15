@@ -1,0 +1,57 @@
+name: publish MCP
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact fletch-mcp version to publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-mcp
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - name: Match the requested version
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: node --input-type=module -e 'import assert from "node:assert/strict"; import fs from "node:fs"; assert.equal(JSON.parse(fs.readFileSync("package.json", "utf8")).version, process.env.RELEASE_VERSION);'
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm run test:package
+      - run: npm pack --ignore-scripts
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fletch-mcp-package
+          path: fletch-mcp-*.tgz
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish the checked tarball
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::Set the NPM_TOKEN repository secret with permission to publish fletch-mcp."
+            exit 1
+          fi
+          npm whoami --registry=https://registry.npmjs.org
+          npm publish "fletch-mcp-${RELEASE_VERSION}.tgz" --access public --provenance --ignore-scripts --registry=https://registry.npmjs.org
+          npm view "fletch-mcp@${RELEASE_VERSION}" version dist.integrity --registry=https://registry.npmjs.org

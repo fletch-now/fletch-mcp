@@ -17,10 +17,15 @@
   "engines": {
     "node": ">=20"
   },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
     "start": "node index.mjs",
     "generate:filters": "node scripts/generate-market-filters.mjs",
-    "test": "node --test test/smoke.test.mjs"
+    "test": "node --test test/smoke.test.mjs",
+    "test:package": "node scripts/check-package.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

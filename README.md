@@ -11,8 +11,9 @@ A thin client of the public API at https://fletch.now; registry reads need no ke
 npx -y github:fletch-now/fletch-mcp
 ```
 
-Runs straight from this repository; the npm package `fletch-mcp` follows, and the
-command becomes `npx -y fletch-mcp` when it does.
+This runs from GitHub. npm publication is pending. To check an installable
+tarball from a checkout, run `npm ci --ignore-scripts`, `npm run test:package`
+and `npm pack`. See [the release guide](https://github.com/fletch-now/fletch-mcp/blob/main/docs/RELEASING.md) for publishing.
 
 [fletch.now/developers](https://fletch.now/developers) ·
 [API reference](https://fletch.now/api/v1/docs) ·
@@ -21,7 +22,7 @@ command becomes `npx -y fletch-mcp` when it does.
 
 ## Use
 
-Claude Desktop, Claude Code, Cursor and any other MCP client take a stdio server:
+Configure a stdio server in your MCP client:
 
 ```json
 {
@@ -30,8 +31,6 @@ Claude Desktop, Claude Code, Cursor and any other MCP client take a stdio server
   }
 }
 ```
-
-Claude Code: `claude mcp add fletch -- npx -y github:fletch-now/fletch-mcp`.
 
 ## Catalog workflow
 
@@ -66,6 +65,7 @@ keeps at most 200 entries for at most ten minutes each.
 
 | Tool | Reads |
 |---|---|
+| `search_contracts` | recorded contracts by ticker, name, address or supported link; bounded pages retain label sources and separate trust verdicts |
 | `status` | is the registry live: jobs, figures, ages, verdicts |
 | `list_assets` | every asset with state; `q`, `symbols`, `fields` (lookalikes, corporateActions, multiplierHistory, feedRounds, concentration) |
 | `get_asset` | one ticker with history, lookalikes and last rounds |
@@ -116,6 +116,7 @@ https://fletch.now/api/v1/openapi.json are the ones to trust.
 ```
 npm ci
 npm test
+npm run test:package
 ```
 
 The test starts `index.mjs` over stdio with the SDK's own client, checks the tool and
@@ -123,6 +124,12 @@ resource counts, replays the ETag and bearer rules against local http and https 
 and calls `status` against https://fletch.now. CI runs the same test on Node 20, 22 and 24.
 The https server uses the self-signed pair under `test/fixtures/`, which guards nothing
 outside that test.
+
+`test:package` installs the npm tarball in a temporary application and runs the
+local stdio checks against its executable and installed dependencies. It checks
+all 24 tools, the resource definitions and credential handling without making
+live API requests. Dependency installation uses npm; the temporary application
+is removed when the check finishes.
 
 ## Licence
 

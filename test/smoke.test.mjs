@@ -13,7 +13,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 // fileURLToPath, not pathname: a checkout under a directory with a space
 // would otherwise hand the transport a percent-encoded path to spawn.
-const INDEX = fileURLToPath(new URL("../index.mjs", import.meta.url));
+const INDEX = process.env.FLETCH_MCP_TEST_ENTRY ?? fileURLToPath(new URL("../index.mjs", import.meta.url));
 // A self-signed pair for localhost that guards nothing outside this test. The
 // server trusts it through NODE_EXTRA_CA_CERTS, which Node reads at start-up,
 // so it has to reach index.mjs through the spawn environment.
@@ -31,6 +31,7 @@ const TOOL_NAMES = [
   "get_asset",
   "get_token",
   "search_pools",
+  "search_contracts",
   "history",
   "feed_rounds",
   "holders",
@@ -96,7 +97,7 @@ function startFake(scheme = "http") {
       response.end(JSON.stringify({ address: request.url.split("/").at(-1), trust: "unknown", symbol: null }));
       return;
     }
-    if (request.url.startsWith("/api/v1/chains/4663/assets?") || request.url.startsWith("/api/v1/chains/4663/markets") || request.url.startsWith("/api/v1/chains/4663/app-catalog") || request.url.startsWith("/api/v1/chains/4663/stock-pairings") || request.url.startsWith("/api/v1/chains/4663/lookalikes")) {
+    if (request.url.startsWith("/api/v1/chains/4663/assets?") || request.url.startsWith("/api/v1/chains/4663/markets") || request.url.startsWith("/api/v1/chains/4663/app-catalog") || request.url.startsWith("/api/v1/chains/4663/stock-pairings") || request.url.startsWith("/api/v1/chains/4663/lookalikes") || request.url.startsWith("/api/v1/chains/4663/search?")) {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({ path: request.url, items: [], total: 0 }));
       return;
@@ -133,7 +134,7 @@ describe("over stdio against a local server", () => {
     fake.server.close();
   });
 
-  test("registers 23 tools and 2 resources", async () => {
+  test("registers 24 tools and 2 resources", async () => {
     const { tools } = await client.listTools();
     assert.deepEqual(tools.map((tool) => tool.name).sort(), [...TOOL_NAMES].sort());
     for (const tool of tools) {
@@ -186,6 +187,31 @@ describe("over stdio against a local server", () => {
     const count=fake.seen.length;
     assert.equal((await client.callTool({name:"list_assets",arguments:{limit:51}})).isError,true);
     assert.equal(fake.seen.length,count);
+  });
+
+  test("contract search preserves the query, bounds each page and sends no credential", async () => {
+    parse(await client.callTool({ name: "search_contracts", arguments: { q: "$TSLA" } }));
+    const request = fake.seen.at(-1);
+    const url = new URL(request.path, fake.url);
+    assert.equal(url.pathname, "/api/v1/chains/4663/search");
+    assert.equal(url.searchParams.get("q"), "$TSLA");
+    assert.equal(url.searchParams.get("page"), "1");
+    assert.equal(url.searchParams.get("limit"), "10");
+    assert.equal(request.headers.authorization, undefined);
+
+    parse(await client.callTool({ name: "search_contracts", arguments: { q: "Tesla", page: 2, limit: 50 } }));
+    const next = new URL(fake.seen.at(-1).path, fake.url);
+    assert.equal(next.searchParams.get("page"), "2");
+    assert.equal(next.searchParams.get("limit"), "50");
+
+    const count = fake.seen.length;
+    for (const arguments_ of [{ q: "" }, { q: "Tesla", page: 0 }, { q: "Tesla", limit: 51 }]) {
+      assert.equal((await client.callTool({ name: "search_contracts", arguments: arguments_ })).isError, true);
+    }
+    assert.equal(fake.seen.length, count);
+
+    parse(await client.callTool({ name: "token_markets", arguments: { q: "$TSLA", searchPage: 3 } }));
+    assert.equal(new URL(fake.seen.at(-1).path, fake.url).searchParams.get("searchPage"), "3");
   });
 
   test("app catalog preserves query and refuses invalid status before sending", async () => {
@@ -407,7 +433,7 @@ describe("over stdio against a local https server", () => {
   });
 });
 
-describe("against https://fletch.now", () => {
+describe("against https://fletch.now", { skip: process.env.FLETCH_MCP_TEST_OFFLINE === "1" }, () => {
   let client;
 
   before(async () => {

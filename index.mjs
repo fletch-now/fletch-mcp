@@ -175,12 +175,26 @@ server.registerTool("token_markets", {
   annotations: READ_ANNOTATIONS,
   inputSchema: {
     ...marketInput,
-    q: z.string().optional().describe("Name, symbol or exact contract address"),
+    q: z.string().max(2048).optional().describe("Ticker, name words, ISIN, contract address or supported explorer link; normalized query up to 128 characters"),
     page: z.number().int().min(1).optional(),
     pageSize: z.union([z.literal(25), z.literal(50)]).optional(),
+    searchPage: z.number().int().min(1).max(99999).optional().describe("Independent page of broader contractSearch matches, 10 addresses per page"),
     minVolumeUsd: z.number().min(MARKET_FILTER_CATALOG.minVolumeUsd.minimum).max(MARKET_FILTER_CATALOG.minVolumeUsd.maximum).optional(),
   },
 }, async function markets(params) { return text(await get(`/api/v1/chains/${CHAIN_ID}/markets${query(params)}`)); });
+
+server.registerTool("search_contracts", {
+  title: "Search recorded contracts",
+  description: "Search recorded assets, contract metadata, lookalike observations and explorer candidates, including addresses outside tracked Markets. Accepts tickers with optional $, name words in any order, ISIN, full or abbreviated addresses, chain-qualified addresses, explorer links and pool IDs or addresses. Pool queries return recorded token currencies. similar=true identifies fallback name or ticker suggestions after no literal match. Each result keeps its label source, observedAt, independent trust verdict and trackedMarket flag. A match does not verify identity; trackedMarket does not establish current price or volume. Missing metadata and unobserved times remain null. Read one page of 10 results by default, at most 50; increment page explicitly using total. Search results can be cached for 15 seconds; checkedAt is the search time and does not refresh the label's observedAt. No account credential is sent.",
+  annotations: READ_ANNOTATIONS,
+  inputSchema: {
+    q: z.string().min(1).max(2048).describe("Search text or supported link; the API normalizes to at most 128 characters"),
+    page: z.number().int().min(1).max(99999).optional(),
+    limit: z.union([z.literal(10), z.literal(20), z.literal(50)]).optional(),
+  },
+}, async function searchContracts({ q, page, limit }) {
+  return text(await get(`/api/v1/chains/${CHAIN_ID}/search${query({ q, page: page ?? 1, limit: limit ?? 10 })}`));
+});
 
 server.registerTool(
   "status",

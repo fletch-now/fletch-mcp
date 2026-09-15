@@ -2,6 +2,8 @@
 
 ## 0.3.2 - 2026-09-14 (prepared)
 
+Check the installed npm tarball against the local stdio suite, including bounded contract search and credential handling. Add a manual publication workflow and tarball release instructions. npm publication remains pending.
+
 Add ascending and descending price, volume, market-cap and pool-count sorting across complete filtered Markets results. Expose asset filters and optional pagination through SDK/MCP reads. Shared raw observations retain their source times; expiry and filtering are recomputed on every request. npm publication remains pending.
 
 ## 0.3.1 - 2026-09-14 (prepared)
