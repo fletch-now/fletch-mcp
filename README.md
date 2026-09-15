@@ -148,6 +148,12 @@ oracle estimates and retains source ages and coverage reasons.
 
 Use `get_token` for one address and `search_pools` for one bounded filtered page.
 The resources remain opt-in; the server never fetches the full registry automatically.
+Human-readable token pages use `/registry/markets/{address}`; JSON remains at
+`/api/v1/tokens/{address}`. For public apps, link the current returned `app.slug`
+at `/published/{slug}`. Owners can rename a listing while keeping its hosted URL.
+Old directory URLs redirect only while the current listing passes public checks.
+[The agent guide](https://fletch.now/skill.md) gives a task-to-endpoint table and
+explains network, authentication and observation-age boundaries.
 [Full agent reference](https://fletch.now/llms-full.txt) and
 [live schema](https://fletch.now/api/v1/openapi.json) describe current behavior.
 The dated 5 and 8 September documents remain historical;
